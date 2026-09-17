@@ -1,0 +1,7 @@
+bin/
+obj/
+keys/
+emails/
+.env
+*.user
+appsettings.*.local.json
