@@ -9,6 +9,8 @@ export default defineNuxtConfig({
     enabled: true
   },
 
+  telemetry: false,
+
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
