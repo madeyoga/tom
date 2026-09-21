@@ -3,6 +3,7 @@ using AuthEndpoints;
 using Tom.WebApi.Data;
 using Tom.WebApi.Identity;
 using Tom.WebApi.Services;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -59,10 +60,40 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddAuthEndpoints<AppUser, AppRole, AppDbContext>(o =>
 {
-    o.Passkeys.Enabled = builder.Configuration.GetValue("AuthEndpoints:Passkeys:Enabled", false);
+    o.Passkeys.Enabled = builder.Configuration.GetValue("AuthEndpoints:Passkeys:Enabled", true);
     o.Passkeys.ServerDomain = builder.Configuration["AuthEndpoints:Passkeys:ServerDomain"] ?? "localhost";
     o.RequireConfirmedAccount = builder.Configuration.GetValue("AuthEndpoints:RequireConfirmedAccount", true);
     o.Jwt.Enabled = builder.Configuration.GetValue("AuthEndpoints:Jwt:Enabled", false);
+    o.EmailConfirmation.ConfirmEmailRedirectUri =
+        builder.Configuration["AuthEndpoints:EmailConfirmation:ConfirmEmailRedirectUri"]
+        ?? "http://localhost:3000/confirm-email";
+
+    o.EmailConfirmation.AllowedRedirectOrigins.Clear();
+    var allowedOrigins = builder.Configuration
+        .GetSection("AuthEndpoints:EmailConfirmation:AllowedRedirectOrigins")
+        .Get<string[]>();
+    if (allowedOrigins is { Length: > 0 })
+    {
+        foreach (var origin in allowedOrigins)
+        {
+            o.EmailConfirmation.AllowedRedirectOrigins.Add(origin);
+        }
+    }
+    else
+    {
+        o.EmailConfirmation.AllowedRedirectOrigins.Add("http://localhost:3000");
+    }
+
+    var reauthLifetime = builder.Configuration["AuthEndpoints:ReAuth:Lifetime"];
+    if (TimeSpan.TryParse(reauthLifetime, out var lifetime))
+    {
+        o.ReAuth.Lifetime = lifetime;
+    }
+});
+
+builder.Services.Configure<AntiforgeryOptions>(options =>
+{
+    options.HeaderName = "RequestVerificationToken";
 });
 
 builder.Services.AddTransient<IEmailSender<AppUser>, FileEmailSender>();
@@ -87,6 +118,22 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+if (builder.Environment.IsDevelopment())
+{
+    var frontendOrigin = builder.Configuration["Frontend:Origin"] ?? "http://localhost:3000";
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("Frontend", policy =>
+        {
+            policy
+                .WithOrigins(frontendOrigin)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+    });
+}
+
 var authorization = builder.Services.AddAuthorizationBuilder();
 AddRolePolicy(authorization, Permissions.Admin.Access, [AppRoles.Admin]);
 
@@ -99,6 +146,12 @@ if (app.Environment.IsProduction())
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("Frontend");
+}
+
 app.UseAuthEndpoints();
 
 app.MapOpenApi();
