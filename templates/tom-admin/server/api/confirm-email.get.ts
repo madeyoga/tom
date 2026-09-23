@@ -1,3 +1,5 @@
+import { resolveServerApiBase } from '#shared/utils/apiBase'
+
 function confirmStatusFromLocation(location: string): 'confirmed' | 'failed' | null {
   if (location.includes('status=confirmed')) {
     return 'confirmed'
@@ -23,7 +25,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
-  const base = String(config.public.apiBase).replace(/\/$/, '')
+  const base = resolveServerApiBase(config.apiInternal, config.public.apiBase)
+  if (!base) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Set NUXT_API_INTERNAL or an absolute NUXT_PUBLIC_API_BASE for confirm-email'
+    })
+  }
   const url = new URL('/identity/confirmEmail', `${base}/`)
   url.searchParams.set('userId', userId)
   url.searchParams.set('code', code)

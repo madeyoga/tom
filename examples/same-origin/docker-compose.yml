@@ -1,0 +1,92 @@
+# Same-origin example. Not part of either template stamp.
+# Local dual-port (`dotnet run` on :5080, `pnpm dev` on :3000) stays as it is.
+#
+#   cd examples/same-origin
+#   cp .env.example .env
+#   docker compose up --build
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - webapi
+      - admin
+
+  webapi:
+    build:
+      context: ../../templates/tom-webapi
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-tom_webapi};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      AuthEndpoints__Passkeys__ServerDomain: ${PASSKEYS_SERVER_DOMAIN:-localhost}
+      AuthEndpoints__EmailConfirmation__ConfirmEmailRedirectUri: ${PUBLIC_ORIGIN:-http://localhost}/confirm-email
+      AuthEndpoints__EmailConfirmation__AllowedRedirectOrigins__0: ${PUBLIC_ORIGIN:-http://localhost}
+      Seed__BootstrapAdminEmail: ${SEED_BOOTSTRAP_ADMIN_EMAIL:-}
+      Seed__BootstrapAdminPassword: ${SEED_BOOTSTRAP_ADMIN_PASSWORD:-}
+    volumes:
+      - webapi_keys:/app/keys
+      - ./emails:/app/emails
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Applies EF migrations, then exits. The template ships no migration until you add one.
+  migrate:
+    build:
+      context: ../../templates/tom-webapi
+      target: migrate
+    environment:
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-tom_webapi};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  admin:
+    build:
+      context: ../../templates/tom-admin
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-.}
+      NUXT_API_INTERNAL: ${NUXT_API_INTERNAL:-http://webapi:8080}
+    depends_on:
+      - webapi
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-tom_webapi}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  webapi_keys:
+  caddy_data:
+  caddy_config:
