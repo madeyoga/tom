@@ -1,3 +1,5 @@
+import { normalizeApiBase } from '#shared/utils/apiBase'
+
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 export const CSRF_PATH = '/identity/csrfToken'
@@ -21,7 +23,7 @@ function isMutating(method: HttpMethod) {
 export function useApi() {
   const config = useRuntimeConfig()
 
-  const baseURL = computed(() => String(config.public.apiBase).replace(/\/$/, ''))
+  const baseURL = computed(() => normalizeApiBase(config.public.apiBase))
 
   const csrfCache = useState<{ cookie?: string }>('auth-csrf-cache', () => ({}))
 

@@ -1,0 +1,59 @@
+# One public site. API prefixes go to the Web API. Everything else, including
+# the Nuxt pages, goes to the Node admin. TLS ends here.
+# localhost uses Caddy's internal CA. A public DNS name gets a public certificate.
+# Do not serve this stack on plain HTTP: Production rejects an http confirm-email redirect.
+#
+# /api/confirm-email is the admin's Nitro helper (check-email paste flow).
+# It is more specific than /api*, so Caddy keeps it on Nuxt. Do not proxy
+# the rest of the API through Nuxt.
+#
+# Optional static admin: remove the admin reverse_proxy handles and serve
+# `nuxt generate` output with file_server. See examples/same-origin/README.md.
+# Static hosting does not run the Nitro confirm-email helper.
+
+(webapi) {
+	reverse_proxy webapi:8080 {
+		header_up Host {host}
+	}
+}
+
+{$PUBLIC_HOST:localhost} {
+	encode gzip
+
+	handle /api/confirm-email* {
+		reverse_proxy admin:3000
+	}
+
+	handle /identity* {
+		import webapi
+	}
+
+	handle /account* {
+		import webapi
+	}
+
+	# External logins from the admin kit live under /auth, not /identity.
+	handle /auth* {
+		import webapi
+	}
+
+	handle /api* {
+		import webapi
+	}
+
+	handle /health {
+		import webapi
+	}
+
+	handle /scalar* {
+		import webapi
+	}
+
+	handle /openapi* {
+		import webapi
+	}
+
+	handle {
+		reverse_proxy admin:3000
+	}
+}

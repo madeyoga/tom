@@ -1,0 +1,8 @@
+bin/
+obj/
+keys/
+emails/
+.env
+.git
+**/.vs
+*.user
