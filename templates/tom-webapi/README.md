@@ -37,7 +37,7 @@ Email confirmation redirects to `http://localhost:3000/confirm-email` (`AuthEndp
 
 [`examples/same-origin`](../../examples/same-origin) is one public host. Caddy sends `/identity*`, `/account*` (passkeys), `/auth*` (external logins), `/api*`, `/health`, `/scalar*`, and `/openapi*` to this API, and every other path to Nuxt. `/api/confirm-email` stays on Nuxt: it is the confirm-email helper, not an API proxy. The browser uses a relative API base, so cookies are host-only. Do not set `SameSite=None`.
 
-`Dockerfile` is multi-stage (`sdk` then `aspnet`). The image listens on `8080` (`ASPNETCORE_URLS=http://+:8080`). TLS ends at Caddy. The entrypoint chowns the `keys/` and `emails/` mounts, then drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that file. A `migrate` stage runs `dotnet ef database update` for the example compose file; this template does not ship a migration, so add one (`dotnet ef migrations add InitialIdentity`) before that stack can seed. Development `dotnet run` still applies migrations on `:5080`.
+`Dockerfile` is multi-stage (`sdk` then `aspnet`). The image listens on `8080` (`ASPNETCORE_URLS=http://+:8080`). TLS ends at Caddy. The entrypoint chowns the `keys/` and `emails/` mounts, then drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that file. `Data/Migrations` contains `InitialIdentity`. Development `dotnet run` applies it on `:5080`. The example compose `migrate` stage runs `dotnet ef database update` before the API starts. Add a new migration when the model changes. The API does not apply migrations itself in Production.
 
 Production environment (real variables, not `.env`):
 

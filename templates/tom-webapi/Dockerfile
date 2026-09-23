@@ -12,7 +12,7 @@ RUN dotnet restore Tom.WebApi.csproj \
 
 FROM build AS migrate
 RUN dotnet tool restore
-ENTRYPOINT ["dotnet", "ef", "database", "update", "--project", "Tom.WebApi.csproj", "--no-launch-profile"]
+ENTRYPOINT ["dotnet", "ef", "database", "update", "--project", "Tom.WebApi.csproj"]
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
