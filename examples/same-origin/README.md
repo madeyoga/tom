@@ -58,17 +58,9 @@ Set both of these to the public site, never to the `webapi` container name:
 
 Postgres data is the `postgres_data` volume. The host port defaults to `5432` (`POSTGRES_PORT`).
 
-This API template does not ship an EF migration. Create one in the API project before the stack can seed:
+The API template includes an `InitialIdentity` migration. The `migrate` service runs `dotnet ef database update` against a fresh Postgres and exits. The API does not apply migrations itself outside Development.
 
-```text
-cd ../../templates/tom-webapi
-dotnet tool restore
-dotnet ef migrations add InitialIdentity
-```
-
-Then rebuild. The `migrate` service runs `dotnet ef database update` and exits. The API does not apply migrations itself outside Development.
-
-You can apply the same migration from the host instead, against the published port:
+To apply that migration from the host instead, with Postgres published on `POSTGRES_PORT`:
 
 ```text
 ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=tom_webapi;Username=postgres;Password=postgres" dotnet ef database update
