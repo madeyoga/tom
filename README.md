@@ -54,4 +54,4 @@ Production leaves CORS off and trusts `X-Forwarded-For` and `X-Forwarded-Proto`.
 
 Nuxt stays Node SSR in that compose file. A static `file_server` swap is documented in the example README and is not the default. The check-email paste flow needs the Nitro route, which static files do not run.
 
-Copy `examples/same-origin/.env.example` to `.env` and follow that README. The API template does not ship an EF migration; create one before the stack can seed.
+Copy `examples/same-origin/.env.example` to `.env` and follow that README. The API template includes an `InitialIdentity` migration. The example `migrate` service applies it before the API starts.

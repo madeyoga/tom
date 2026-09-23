@@ -44,7 +44,7 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # Applies EF migrations, then exits. The template ships no migration until you add one.
+  # Applies the template InitialIdentity migration, then exits.
   migrate:
     build:
       context: ../../templates/tom-webapi
