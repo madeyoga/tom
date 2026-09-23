@@ -50,7 +50,7 @@ Cookie auth uses `credentials: 'include'`. Do not set `SameSite=None` for this l
 
 Behind Caddy, set the browser base to `.` (`NUXT_PUBLIC_API_BASE`). Blank and `/` mean the same relative base. Nuxt ignores an empty override and would keep `http://localhost:5080`, so the example uses `.`. Set `NUXT_API_INTERNAL=http://webapi:8080` so the confirm-email server fetch does not use that sentinel.
 
-Production leaves CORS off and trusts `X-Forwarded-For` and `X-Forwarded-Proto`. Passkeys `ServerDomain` and the confirm-email redirect / allowed origins are the public host, not the container name. DataProtection keys live on a volume. TLS ends at Caddy.
+Production leaves CORS off and trusts `X-Forwarded-For` and `X-Forwarded-Proto`. Passkeys `ServerDomain` and the confirm-email redirect / allowed origins are the public host, not the container name. That redirect must be `https`. The example default is `https://localhost` with Caddy's internal CA. DataProtection keys live on a volume. TLS ends at Caddy.
 
 Nuxt stays Node SSR in that compose file. A static `file_server` swap is documented in the example README and is not the default. The check-email paste flow needs the Nitro route, which static files do not run.
 

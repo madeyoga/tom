@@ -1,6 +1,7 @@
 # One public site. API prefixes go to the Web API. Everything else, including
-# the Nuxt pages, goes to the Node admin. TLS is Caddy's job: a DNS name in
-# PUBLIC_HOST turns on automatic HTTPS; ":80" stays plain HTTP.
+# the Nuxt pages, goes to the Node admin. TLS ends here.
+# localhost uses Caddy's internal CA. A public DNS name gets a public certificate.
+# Do not serve this stack on plain HTTP: Production rejects an http confirm-email redirect.
 #
 # /api/confirm-email is the admin's Nitro helper (check-email paste flow).
 # It is more specific than /api*, so Caddy keeps it on Nuxt. Do not proxy
@@ -16,7 +17,7 @@
 	}
 }
 
-{$PUBLIC_HOST::80} {
+{$PUBLIC_HOST:localhost} {
 	encode gzip
 
 	handle /api/confirm-email* {

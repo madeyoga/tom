@@ -13,7 +13,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      PUBLIC_HOST: ${PUBLIC_HOST:-:80}
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -31,8 +31,8 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-tom_webapi};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       AuthEndpoints__Passkeys__ServerDomain: ${PASSKEYS_SERVER_DOMAIN:-localhost}
-      AuthEndpoints__EmailConfirmation__ConfirmEmailRedirectUri: ${PUBLIC_ORIGIN:-http://localhost}/confirm-email
-      AuthEndpoints__EmailConfirmation__AllowedRedirectOrigins__0: ${PUBLIC_ORIGIN:-http://localhost}
+      AuthEndpoints__EmailConfirmation__ConfirmEmailRedirectUri: ${PUBLIC_ORIGIN:-https://localhost}/confirm-email
+      AuthEndpoints__EmailConfirmation__AllowedRedirectOrigins__0: ${PUBLIC_ORIGIN:-https://localhost}
       Seed__BootstrapAdminEmail: ${SEED_BOOTSTRAP_ADMIN_EMAIL:-}
       Seed__BootstrapAdminPassword: ${SEED_BOOTSTRAP_ADMIN_PASSWORD:-}
     volumes:

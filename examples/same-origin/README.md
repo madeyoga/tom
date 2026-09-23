@@ -13,7 +13,15 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost` when `PUBLIC_HOST=:80`. A DNS name in `PUBLIC_HOST` (for example `app.example.com`) makes Caddy obtain a certificate and serve HTTPS. Point that name at this host before starting.
+Open `https://localhost`. Caddy uses its internal CA for that name, so the browser warns until you trust the root:
+
+```text
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+```
+
+Trust `caddy-root.crt` in the OS or browser trust store. A DNS name in `PUBLIC_HOST` (for example `app.example.com`) makes Caddy obtain a public certificate instead. Point that name at this host, and set `PUBLIC_ORIGIN` to `https://` that name.
+
+The confirm-email redirect must be `https` in Production. `PUBLIC_ORIGIN=http://...` or `PUBLIC_HOST=:80` will not boot the API.
 
 The API image listens on `8080` inside the compose network. TLS ends at Caddy. `ASPNETCORE_URLS=http://+:8080`.
 
@@ -42,9 +50,9 @@ The confirm-email Nitro route runs inside the admin container, so it cannot use 
 Set both of these to the public site, never to the `webapi` container name:
 
 - `PASSKEYS_SERVER_DOMAIN` is the host only (`localhost` or `app.example.com`).
-- `PUBLIC_ORIGIN` is the origin (`http://localhost` or `https://app.example.com`). The API uses it as the confirm-email redirect and the only allowed redirect origin.
+- `PUBLIC_ORIGIN` is the `https` origin (`https://localhost` or `https://app.example.com`). The API uses it as the confirm-email redirect and the only allowed redirect origin.
 
-`http://localhost` is a secure context, so passkeys work on the plain-HTTP example. Any other host needs HTTPS.
+`https://localhost` is a secure context once you continue past or trust the internal certificate, so passkeys work there. Any other host needs a certificate the browser accepts. `PASSKEYS_SERVER_DOMAIN` stays the hostname only.
 
 ## Postgres, migrations, keys, bootstrap
 

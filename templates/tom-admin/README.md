@@ -45,7 +45,7 @@ Nuxt listens on `http://localhost:3000`. Set `NUXT_PUBLIC_API_BASE` (default `ht
 
 Set `NUXT_API_INTERNAL=http://webapi:8080` for the Nitro confirm-email fetch. That route must not call the empty public base from inside the container. `/api/confirm-email` is the only API-looking path Caddy leaves on Nuxt.
 
-`credentials: 'include'` stays. Cookies are host-only. The API's passkeys `ServerDomain` and confirm-email redirect / allowed origins are the public host.
+`credentials: 'include'` stays. Cookies are host-only. The API's passkeys `ServerDomain` is the public hostname. The confirm-email redirect and allowed origins are that host's `https` origin. Production rejects an `http` redirect.
 
 This image is Node SSR, which is what compose runs. A static `file_server` swap is documented in the example README and is not the default. Static files do not run the Nitro confirm-email helper. Email links that open `/identity/confirmEmail` still redirect the browser to `/confirm-email`.
 

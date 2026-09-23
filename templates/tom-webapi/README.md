@@ -42,8 +42,8 @@ Email confirmation redirects to `http://localhost:3000/confirm-email` (`AuthEndp
 Production environment (real variables, not `.env`):
 
 - `AuthEndpoints__Passkeys__ServerDomain` is the public host (`localhost` or `app.example.com`), never the container name.
-- `AuthEndpoints__EmailConfirmation__ConfirmEmailRedirectUri` is `{origin}/confirm-email`.
-- `AuthEndpoints__EmailConfirmation__AllowedRedirectOrigins__0` is that same origin.
+- `AuthEndpoints__EmailConfirmation__ConfirmEmailRedirectUri` is `https://{host}/confirm-email`. Production rejects an `http` redirect.
+- `AuthEndpoints__EmailConfirmation__AllowedRedirectOrigins__0` is that same `https` origin.
 - `Seed__BootstrapAdminEmail` and `Seed__BootstrapAdminPassword` create the first Admin when none exists.
 
 Production enables `ForwardedHeaders` for `X-Forwarded-For` and `X-Forwarded-Proto` only, and does not register CORS. DataProtection keys stay in `keys/` (`SetApplicationName` is unchanged). Mount a volume there. Compose does that.
