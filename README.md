@@ -2,6 +2,8 @@
 
 Opinionated ASP.NET Core 10 Web API stamp plus a paired Nuxt 4 admin auth kit. AuthEndpoints is a template dependency, not this repo.
 
+The API structure guide lives in `.cursor/skills/aspnetcore-webapi-structure/`. Each new project records its own decisions in `.cursor/rules/api-structure.mdc`.
+
 Local development is two origins: the API on `http://localhost:5080`, the admin on `http://localhost:3000`, with the Development CORS policy. Production in [`examples/same-origin`](examples/same-origin) is one public host. Caddy path-splits API routes to the Web API and sends everything else to Nuxt. The browser calls the API on that same host. There is no Nitro, Hono, or Express auth proxy in front of the API.
 
 ## Install the API template
