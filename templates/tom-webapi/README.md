@@ -4,10 +4,26 @@ Opinionated ASP.NET Core 10 Web API solution. PostgreSQL, Identity with `Guid` k
 
 ```text
 src/Tom.WebApi.Api/          # the API
-tests/Tom.WebApi.Api.Tests/  # Testcontainers PostgreSQL, endpoint tests, architecture tests
+tests/Tom.WebApi.Api.Tests/  # Testcontainers PostgreSQL and endpoint tests
 ```
 
 `dotnet new` replaces `Tom.WebApi` in those paths. Pair with [`tom-admin`](../tom-admin) for a Nuxt cookie SPA (register, login, 2FA, passkeys, security, step-up).
+
+## Guards
+
+`--guards` chooses how much of the structure guide is enforced in the stamp. The default is `lean`.
+
+| Value | What you get |
+| --- | --- |
+| `lean` | BannedSymbols, BannedApiAnalyzers, `.editorconfig` severities, `TreatWarningsAsErrors` in Release, `ValidateScopes` / `ValidateOnBuild`, Notes endpoint tests, and CI (restore, Release build, test, `dotnet format --verify-no-changes`, gate job `ci`). No `Architecture/` folder and no NetArchTest package. |
+| `full` | Everything in `lean`, plus `tests/<App>.Api.Tests/Architecture/` and NetArchTest. |
+
+```text
+dotnet new tom-webapi -n Shop -o ./Shop
+dotnet new tom-webapi -n Shop -o ./Shop --guards full
+```
+
+This repository keeps the full checks, so `dotnet test` here runs the architecture tests. The stamped `.cursor/rules/api-structure.mdc` records the chosen level.
 
 ## Run
 
@@ -29,7 +45,7 @@ The HTTP profile listens on `http://localhost:5080`.
 
 ## Tests
 
-`dotnet test` starts PostgreSQL with Testcontainers and runs endpoint tests plus the architecture checks. `dotnet format --verify-no-changes` is the formatting gate. `.github/workflows/ci.yml` restores, builds Release, tests, and formats, then a final job named `ci`.
+`dotnet test` starts PostgreSQL with Testcontainers. In this repository that includes the architecture checks. A lean stamp runs the Notes and OpenAPI endpoint tests only. `dotnet format --verify-no-changes` is the formatting gate. `.github/workflows/ci.yml` restores, builds Release, tests, and formats, then a final job named `ci`.
 
 ## Pair with tom-admin
 

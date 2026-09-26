@@ -13,6 +13,25 @@
     "language": "C#",
     "type": "solution"
   },
+  "symbols": {
+    "guards": {
+      "type": "parameter",
+      "datatype": "choice",
+      "description": "Guard rails copied into the project.",
+      "choices": [
+        {
+          "choice": "lean",
+          "description": "Banned symbols, editorconfig severities, Release warnings-as-errors, endpoint tests, and CI. No architecture tests."
+        },
+        {
+          "choice": "full",
+          "description": "Lean guards plus NetArchTest architecture tests."
+        }
+      ],
+      "defaultValue": "lean",
+      "replaces": "__GUARDS__"
+    }
+  },
   "sources": [
     {
       "modifiers": [
@@ -21,6 +40,12 @@
             "**/bin/**",
             "**/obj/**",
             ".env"
+          ]
+        },
+        {
+          "condition": "(guards != \"full\")",
+          "exclude": [
+            "tests/**/Architecture/**"
           ]
         }
       ]

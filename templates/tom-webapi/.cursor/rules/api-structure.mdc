@@ -4,7 +4,7 @@ globs: src/Tom.WebApi.Api/**,tests/Tom.WebApi.Api.Tests/**
 alwaysApply: false
 ---
 
-For new API code, read and follow `.cursor/skills/aspnetcore-webapi-structure/SKILL.md`, plus `module-boundaries.md`, `reference.md`, and `enforceable-checks.md` in that folder. Where a project decision below differs from the guide, follow the decision.
+Follow the patterns of existing modules first. Never copy anything listed under "Existing code that does not match yet". Open the `aspnetcore-webapi-structure` skill only when there is no existing example to follow, or when the code and the skill disagree. The skill wins.
 
 ## Project decisions
 
@@ -18,6 +18,7 @@ For new API code, read and follow `.cursor/skills/aspnetcore-webapi-structure/SK
 - **Pagination:** `Shared/Pagination.cs` starts `PageIndex` at 1 and defaults `PageSize` to 10.
 - **Host:** Development CORS allows `Frontend:Origin` (default `http://localhost:3000`) with credentials. Production leaves CORS off and trusts `X-Forwarded-For` and `X-Forwarded-Proto`. OpenAPI and Scalar are mapped only in Development or when `OpenApi:Enabled` is true. Do not set that flag in `appsettings.json` or `appsettings.Production.json`.
 - **Layout:** one `Microsoft.NET.Sdk.Web` / `net10.0` project at `src/Tom.WebApi.Api/`, tests at `tests/Tom.WebApi.Api.Tests/`. `Program.cs` sets `ValidateScopes` and `ValidateOnBuild` and ends with `public partial class Program`.
+- **Guards:** `__GUARDS__`. `lean` (the default) keeps BannedSymbols, BannedApiAnalyzers, `.editorconfig` severities, `TreatWarningsAsErrors` in Release, `ValidateScopes`/`ValidateOnBuild`, example-module endpoint tests, and CI (restore, Release build, test, `dotnet format --verify-no-changes`, gate job `ci`). `full` also stamps `tests/Tom.WebApi.Api.Tests/Architecture/` and the NetArchTest package.
 - **Example module:** `Notes/` shows the module shape (entity, configuration, `db.Notes()`, permissions, `NoteApi`, `Contracts`). Delete that folder and its `Program.cs` calls to remove it.
 
 ## Existing code that does not match yet
