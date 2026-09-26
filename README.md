@@ -22,9 +22,9 @@ dotnet new tom-webapi -n Shop -o ./Shop
 
 Uninstall: `dotnet new uninstall Tom.WebApi`.
 
-The stamped API listens on `http://localhost:5080`. See the stamped project README for Postgres, Scalar, and cookie login (`LoginCookie`, not `useCookies`).
+The stamped API is a solution: `src/<Name>.Api` and `tests/<Name>.Api.Tests`. It listens on `http://localhost:5080`. See the stamped project README for Postgres, Scalar, and cookie login (`LoginCookie`, not `useCookies`).
 
-`templates/tom-webapi/Dockerfile` is a multi-stage SDK build. The runtime image listens on `8080` and drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that Dockerfile.
+`templates/tom-webapi/Dockerfile` is a multi-stage SDK build of `src/Tom.WebApi.Api`. The runtime image listens on `8080` and drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that Dockerfile.
 
 ## Install the admin template
 
@@ -56,4 +56,4 @@ Production leaves CORS off and trusts `X-Forwarded-For` and `X-Forwarded-Proto`.
 
 Nuxt stays Node SSR in that compose file. A static `file_server` swap is documented in the example README and is not the default. The check-email paste flow needs the Nitro route, which static files do not run.
 
-Copy `examples/same-origin/.env.example` to `.env` and follow that README. The API template includes an `InitialIdentity` migration. The example `migrate` service applies it before the API starts.
+Copy `examples/same-origin/.env.example` to `.env` and follow that README. The API template includes an `Initial` migration. The example `migrate` service applies it before the API starts.

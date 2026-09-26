@@ -5,7 +5,7 @@ mkdir -p /app/keys /app/emails
 
 if [ "$(id -u)" = "0" ]; then
   chown -R app:app /app/keys /app/emails
-  exec runuser -u app -- dotnet Tom.WebApi.dll "$@"
+  exec runuser -u app -- dotnet Tom.WebApi.Api.dll "$@"
 fi
 
-exec dotnet Tom.WebApi.dll "$@"
+exec dotnet Tom.WebApi.Api.dll "$@"

@@ -31,7 +31,7 @@ Nuxt listens on `http://localhost:3000`. Set `NUXT_PUBLIC_API_BASE` (default `ht
    cd Shop
    cp .env.example .env   # set Seed__Password
    dotnet tool restore
-   dotnet run
+   dotnet run --project src/Shop.Api
    ```
 
 2. Run this admin on `:3000` with `NUXT_PUBLIC_API_BASE=http://localhost:5080`. Leave `NUXT_API_INTERNAL` unset.

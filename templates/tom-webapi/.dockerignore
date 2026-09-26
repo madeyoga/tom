@@ -1,8 +1,11 @@
-bin/
-obj/
-keys/
-emails/
+**/bin/
+**/obj/
+**/keys/
+**/emails/
 .env
 .git
+.github
+.cursor
 **/.vs
 *.user
+tests/

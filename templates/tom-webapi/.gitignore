@@ -5,3 +5,4 @@ emails/
 .env
 *.user
 appsettings.*.local.json
+TestResults/

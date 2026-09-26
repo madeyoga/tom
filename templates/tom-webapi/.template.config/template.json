@@ -11,7 +11,7 @@
   "defaultName": "Tom.WebApi",
   "tags": {
     "language": "C#",
-    "type": "project"
+    "type": "solution"
   },
   "sources": [
     {

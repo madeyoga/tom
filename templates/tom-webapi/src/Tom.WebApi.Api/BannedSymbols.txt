@@ -1,0 +1,59 @@
+# DATA-05 keys
+M:System.Guid.NewGuid;Use Guid.CreateVersion7() (DATA-05). Suppress with a reason only for non-key random values.
+
+# DATA-08 / TEST-04 time
+P:System.DateTime.Now;Inject TimeProvider and call GetUtcNow() (DATA-08)
+P:System.DateTime.UtcNow;Inject TimeProvider and call GetUtcNow() (DATA-08)
+P:System.DateTime.Today;Inject TimeProvider (DATA-08)
+P:System.DateTimeOffset.Now;Inject TimeProvider and call GetUtcNow() (DATA-08)
+P:System.DateTimeOffset.UtcNow;Inject TimeProvider and call GetUtcNow() (DATA-08)
+
+# API-03 results
+T:Microsoft.AspNetCore.Http.Results;Use TypedResults and a Results<...> union (API-03)
+
+# STR-05 controllers
+T:Microsoft.AspNetCore.Mvc.ControllerBase;Minimal APIs only (STR-05)
+T:Microsoft.AspNetCore.Mvc.Controller;Minimal APIs only (STR-05)
+
+# DATA-06 sync EF
+M:Microsoft.EntityFrameworkCore.DbContext.SaveChanges;Use SaveChangesAsync(ct) (DATA-06)
+M:Microsoft.EntityFrameworkCore.DbContext.SaveChanges(System.Boolean);Use SaveChangesAsync(ct) (DATA-06)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.Migrate(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade);Use MigrateAsync(ct) (DATA-06)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.Migrate(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String);Use MigrateAsync(ct) (DATA-06)
+M:Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade.EnsureCreated;Use migrations (DATA-10)
+M:Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade.EnsureCreatedAsync(System.Threading.CancellationToken);Use migrations (DATA-10)
+
+# DATA-09 raw SQL
+M:Microsoft.EntityFrameworkCore.RelationalQueryableExtensions.FromSqlRaw``1(Microsoft.EntityFrameworkCore.DbSet{``0},System.String,System.Object[]);Use FromSql($"...") (DATA-09)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String,System.Object[]);Use ExecuteSql($"...") (DATA-09)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String,System.Collections.Generic.IEnumerable{System.Object});Use ExecuteSql($"...") (DATA-09)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String,System.Threading.CancellationToken);Use ExecuteSqlAsync($"...") (DATA-09)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String,System.Object[]);Use ExecuteSqlAsync($"...") (DATA-09)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String,System.Collections.Generic.IEnumerable{System.Object},System.Threading.CancellationToken);Use ExecuteSqlAsync($"...") (DATA-09)
+M:Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.SqlQueryRaw``1(Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade,System.String,System.Object[]);Use SqlQuery($"...") (DATA-09)
+
+# DATA-02 mapping attributes
+T:System.ComponentModel.DataAnnotations.Schema.TableAttribute;Map in IEntityTypeConfiguration (DATA-02)
+T:System.ComponentModel.DataAnnotations.Schema.ColumnAttribute;Map in IEntityTypeConfiguration (DATA-02)
+T:System.ComponentModel.DataAnnotations.Schema.ForeignKeyAttribute;Map in IEntityTypeConfiguration (DATA-02)
+T:System.ComponentModel.DataAnnotations.Schema.InversePropertyAttribute;Map in IEntityTypeConfiguration (DATA-02)
+T:System.ComponentModel.DataAnnotations.KeyAttribute;Map in IEntityTypeConfiguration (DATA-02)
+T:Microsoft.EntityFrameworkCore.IndexAttribute;Map in IEntityTypeConfiguration (DATA-02)
+T:Microsoft.EntityFrameworkCore.PrecisionAttribute;Map in IEntityTypeConfiguration (DATA-02)
+
+# DI-05 HttpClient
+M:System.Net.Http.HttpClient.#ctor;Use IHttpClientFactory or a typed client (DI-05)
+M:System.Net.Http.HttpClient.#ctor(System.Net.Http.HttpMessageHandler);Use IHttpClientFactory or a typed client (DI-05)
+M:System.Net.Http.HttpClient.#ctor(System.Net.Http.HttpMessageHandler,System.Boolean);Use IHttpClientFactory or a typed client (DI-05)
+
+# DI-07 BuildServiceProvider
+M:Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(Microsoft.Extensions.DependencyInjection.IServiceCollection);Use options/factory overloads (DI-07)
+M:Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Boolean);Use options/factory overloads (DI-07)
+M:Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.DependencyInjection.ServiceProviderOptions);Use options/factory overloads (DI-07)
+
+# Optional: sync over async
+M:System.Threading.Tasks.Task.Wait;Await instead
+P:System.Threading.Tasks.Task`1.Result;Await instead
+
+# Optional, tenancy pattern only
+M:Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.IgnoreQueryFilters``1(System.Linq.IQueryable{``0});Use IgnoreQueryFilters(["Tenant"]) in platform-admin endpoints only

@@ -1,0 +1,43 @@
+root = true
+
+[*.cs]
+# STR-03 namespace matches folder
+dotnet_diagnostic.IDE0130.severity = warning
+dotnet_style_namespace_match_folder = true
+csharp_style_namespace_declarations = file_scoped:warning
+
+# API-08 forward CancellationToken
+dotnet_diagnostic.CA2016.severity = warning
+# CODE-01 mark pure members static
+dotnet_diagnostic.CA1822.severity = warning
+# seal internal types (entities, services, configurations)
+dotnet_diagnostic.CA1852.severity = warning
+# DI-07 BuildServiceProvider in ConfigureServices (built-in ASP.NET analyzer)
+dotnet_diagnostic.ASP0000.severity = error
+# banned APIs
+dotnet_diagnostic.RS0030.severity = error
+# EF internal API use
+dotnet_diagnostic.EF1001.severity = error
+# logging: structured templates
+dotnet_diagnostic.CA2254.severity = warning
+dotnet_diagnostic.CA1848.severity = suggestion
+dotnet_diagnostic.CA1873.severity = suggestion
+# unused usings
+dotnet_diagnostic.IDE0005.severity = warning
+
+# Shared/ is a folder name, not an API consumed from VB (latest-recommended flags the namespace)
+dotnet_diagnostic.CA1716.severity = none
+
+# ASP.NET apps have no SynchronizationContext
+dotnet_diagnostic.CA2007.severity = none
+
+# Leading **/ so it matches src/{App}.Api/Migrations from a repo-root .editorconfig
+[**/Migrations/**.cs]
+generated_code = true
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+
+# Test naming: Method_names_with_underscores and xunit *Collection fixtures
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1711.severity = none
