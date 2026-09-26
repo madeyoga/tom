@@ -44,7 +44,7 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # Applies the template InitialIdentity migration, then exits.
+  # Applies the template Initial migration, then exits.
   migrate:
     build:
       context: ../../templates/tom-webapi

@@ -58,12 +58,12 @@ Set both of these to the public site, never to the `webapi` container name:
 
 Postgres data is the `postgres_data` volume. The host port defaults to `5432` (`POSTGRES_PORT`).
 
-The API template includes an `InitialIdentity` migration. The `migrate` service runs `dotnet ef database update` against a fresh Postgres and exits. The API does not apply migrations itself outside Development.
+The API template includes an `Initial` migration (Identity plus the example `notes` table). The `migrate` service runs `dotnet ef database update` against a fresh Postgres and exits. The API does not apply migrations itself outside Development.
 
-To apply that migration from the host instead, with Postgres published on `POSTGRES_PORT`:
+To apply that migration from the host instead, from the API template directory (or a stamped project root), with Postgres published on `POSTGRES_PORT`:
 
 ```text
-ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=tom_webapi;Username=postgres;Password=postgres" dotnet ef database update
+ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=tom_webapi;Username=postgres;Password=postgres" dotnet ef database update --project src/Tom.WebApi.Api
 ```
 
 DataProtection keys are the `webapi_keys` volume, mounted at `/app/keys`. The app still calls `SetApplicationName`. Keep that volume: a new empty key ring logs everyone out and breaks protected tokens. The container starts as root only to chown `keys/` and `emails/`, then drops to the non-root `app` user.
@@ -88,4 +88,4 @@ Drop the `admin` service and the `/api/confirm-email` exception when you do that
 
 ## Stamped projects
 
-The compose file builds the templates in this repo. After `dotnet new tom-webapi` and `nuxi init`, point `build.context` at those projects. `dotnet new` replaces the `Tom.WebApi` source name inside the API Dockerfile, including the entry assembly name.
+The compose file builds the templates in this repo. After `dotnet new tom-webapi` and `nuxi init`, point `build.context` at those projects. `dotnet new` replaces the `Tom.WebApi` source name inside the API Dockerfile, including the `src/Tom.WebApi.Api` project path and the entry assembly name.

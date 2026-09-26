@@ -7,12 +7,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet restore Tom.WebApi.csproj \
-    && dotnet publish Tom.WebApi.csproj -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet restore src/Tom.WebApi.Api/Tom.WebApi.Api.csproj \
+    && dotnet publish src/Tom.WebApi.Api/Tom.WebApi.Api.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 FROM build AS migrate
 RUN dotnet tool restore
-ENTRYPOINT ["dotnet", "ef", "database", "update", "--project", "Tom.WebApi.csproj"]
+ENTRYPOINT ["dotnet", "ef", "database", "update", "--project", "src/Tom.WebApi.Api/Tom.WebApi.Api.csproj"]
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
