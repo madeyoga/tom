@@ -6,6 +6,8 @@ alwaysApply: false
 
 Follow the patterns of existing modules first. Never copy anything listed under "Existing code that does not match yet". Open the `aspnetcore-webapi-structure` skill only when there is no existing example to follow, or when the code and the skill disagree. The skill wins.
 
+Before requesting review, run pstack's `/no-comments` on the diff and fix the accepted findings, if pstack is installed.
+
 ## Project decisions
 
 - **Identity keys:** `Guid` v7. `src/Tom.WebApi.Api/Identity/AppUser.cs` and `AppRole.cs` set `Id = Guid.CreateVersion7()` in their constructors. `AppUserConfiguration` and `AppRoleConfiguration` mark those ids `ValueGeneratedNever()`. `AppDbContext` is `IdentityDbContext<AppUser, AppRole, Guid>`.
