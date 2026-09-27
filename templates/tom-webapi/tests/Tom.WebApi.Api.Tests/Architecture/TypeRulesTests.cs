@@ -139,16 +139,6 @@ public sealed class TypeRulesTests
     }
 
     [Fact]
-    public void DbContext_has_no_entity_dbsets()
-    {
-        var sets = typeof(AppDbContext)
-            .GetProperties(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.PropertyType.IsGenericType
-                && property.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>));
-        Assert.Empty(sets);
-    }
-
-    [Fact]
     public void Seeders_have_distinct_orders()
     {
         var seeders = Arch.Types

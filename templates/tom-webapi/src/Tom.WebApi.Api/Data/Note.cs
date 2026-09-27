@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Tom.WebApi.Api.Data;
 
-internal sealed class Note
+public sealed class Note
 {
     public long Id { get; set; }
 
@@ -38,9 +38,4 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
             .HasForeignKey(note => note.OwnerUserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
-}
-
-internal static class NoteSet
-{
-    public static DbSet<Note> Notes(this AppDbContext db) => db.Set<Note>();
 }

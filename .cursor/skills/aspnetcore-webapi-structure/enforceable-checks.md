@@ -273,7 +273,6 @@ Verified with NetArchTest.Rules 1.3.2: `ResideInNamespaceMatching` and `FailingT
 | MOD-01 | Every feature has a static class `{Feature}Module` in namespace `{Root}.{Feature}` exactly with `Add{Feature}Module(IServiceCollection, IConfiguration)` and `Map{Feature}Module(IEndpointRouteBuilder)`. `Program.cs` text contains both calls. |
 | AUTH-02 | `typeof(AppUser).BaseType == typeof(IdentityUser<Guid>)`, same for `AppRole`, `AppDbContext` derives from `IdentityDbContext<AppUser, AppRole, Guid>`, and `new AppUser().Id.Version == 7`. |
 | AUTH-07 | Every `{Feature}Permissions` const matches `^[A-Z][A-Za-z]+\.[A-Z][A-Za-z]+$` and is unique. |
-| DATA-03 | `typeof(AppDbContext).GetProperties(BindingFlags.DeclaredOnly | Public | Instance)` has no `DbSet<>` property. |
 | SEED-01 | Every `IDataSeeder` implementation is registered (see 4.4) and has a distinct `Order`. |
 | ERR-05 | No type in `Arch.Api` derives from `System.Exception`. Expected failures are `Result`/`ProblemHttpResult` values. |
 | ERR-01 | No type in `Arch.Api` implements `IExceptionHandler` (unexpected exceptions go to the default `UseExceptionHandler` + ProblemDetails). An added handler needs an allowlist entry with a reason. |
@@ -692,7 +691,7 @@ Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, N
 | STR-06 | 4.6 | AUTH-08 | review |
 | STR-07 | 4.8 | DATA-01 | review |
 | MOD-01 | 4.2 | DATA-02 | 4.5, 4.8, ban (mapping attributes) |
-| MOD-02 | review | DATA-03 | 4.2 |
+| MOD-02 | review | DATA-03 | review |
 | MOD-03 | 4.1, 4.8 | DATA-04 | review (4.5 reports) |
 | MOD-04 | review, 4.8 (query syntax) | DATA-05 | ban `Guid.NewGuid`, 4.5 |
 | MOD-05 | review, optional 4.9 | DATA-06 | ban (SaveChanges, Migrate), review (sync LINQ) |
@@ -736,7 +735,7 @@ Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, N
 These need judgment. Agents check them against the diff and list any deviation in the PR description.
 
 - Design: MOD-02, MOD-04 (`.Join`), MOD-05 (unless 4.9 is added), MOD-07, MOD-08, MOD-10, MOD-12 (fix order), PRG-01, API-02 (beyond the lambda check), API-04, API-09, API-10, CODE-02, DI-01.
-- Data: DATA-01, DATA-04, DATA-06 (sync LINQ), DATA-07, DATA-14 (`.Join`), DATA-15, DATA-16, DATA-10, DATA-11, DATA-12, DI-08.
+- Data: DATA-01, DATA-03, DATA-04, DATA-06 (sync LINQ), DATA-07, DATA-14 (`.Join`), DATA-15, DATA-16, DATA-10, DATA-11, DATA-12, DI-08.
 - Errors and security: ERR-02, ERR-03 (beyond the report), ERR-04, ERR-05 (throw sites), ERR-06, AUTH-01, AUTH-03 to AUTH-05, AUTH-08.
 - DTOs and docs: DTO-01, DTO-04, DTO-06, DOC-03.
 - Seeding and tests: SEED-02, SEED-03, TEST-02 to TEST-04.

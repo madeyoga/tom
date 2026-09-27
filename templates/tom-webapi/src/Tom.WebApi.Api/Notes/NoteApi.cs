@@ -47,7 +47,7 @@ public static class NoteApi
         CancellationToken cancellationToken)
     {
         var userId = user.RequiredUserId;
-        var query = db.Notes().AsNoTracking().Where(note => note.OwnerUserId == userId);
+        var query = db.Notes.AsNoTracking().Where(note => note.OwnerUserId == userId);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = $"%{search.Trim()}%";
@@ -69,7 +69,7 @@ public static class NoteApi
         CurrentUser user,
         CancellationToken cancellationToken)
     {
-        var note = await db.Notes().AsNoTracking()
+        var note = await db.Notes.AsNoTracking()
             .Where(item => item.Id == id && item.OwnerUserId == user.RequiredUserId)
             .Select(item => new NoteResponse(item.Id, item.Title, item.Body, item.CreatedAt, item.ArchivedAt))
             .FirstOrDefaultAsync(cancellationToken);
@@ -85,7 +85,7 @@ public static class NoteApi
     {
         var userId = user.RequiredUserId;
         var title = request.Title.Trim();
-        if (await db.Notes().AnyAsync(
+        if (await db.Notes.AnyAsync(
             note => note.OwnerUserId == userId && note.Title == title,
             cancellationToken))
         {
@@ -99,7 +99,7 @@ public static class NoteApi
             OwnerUserId = userId,
             CreatedAt = clock.GetUtcNow(),
         };
-        db.Notes().Add(note);
+        db.Notes.Add(note);
         await db.SaveChangesAsync(cancellationToken);
 
         var body = new NoteResponse(note.Id, note.Title, note.Body, note.CreatedAt, null);

@@ -24,7 +24,7 @@ Keep `Shared/` small. Add a type there only when at least two features need it a
 
 ## Data/
 
-- One file per entity: the entity, its `IEntityTypeConfiguration<T>`, and its `db.X()` accessor (DATA-03), in `Data/{Entity}.cs`. Small enums and value types used only by that entity may share the file. Anything used by several entities gets its own file, named after the type.
+- One file per entity: the entity and its `IEntityTypeConfiguration<T>` in `Data/{Entity}.cs` (DATA-02). `AppDbContext` exposes the set as `DbSet<T>` (DATA-03). Small enums and value types used only by that entity may share the file. Anything used by several entities gets its own file, named after the type.
 - `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>` lives in `Data/AppDbContext.cs`. `OnModelCreating` calls `base.OnModelCreating(builder)` then `builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`, which also finds `internal` configuration classes with a parameterless constructor.
 - `AppUser` and `AppRole` are entities, so they live in `Data/` too. The `Identity/` feature owns their state (MOD-05).
 - Navigations are allowed in both directions (DATA-15). Configure each relationship once, in the file of the entity that holds the foreign key:

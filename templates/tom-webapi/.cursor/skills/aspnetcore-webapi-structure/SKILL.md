@@ -32,7 +32,7 @@ src/{App}.Api/
 ├── Shared/                   # Result, paging, problems, current user, IDataSeeder, small helpers
 ├── Data/                     # every entity + its configuration, AppDbContext, Migrations/
 │   ├── AppDbContext.cs
-│   ├── {Entity}.cs           # entity + IEntityTypeConfiguration<{Entity}> + db.{Entities}() accessor
+│   ├── {Entity}.cs           # entity + IEntityTypeConfiguration<{Entity}>
 │   └── Migrations/
 ├── Identity/                 # feature: users API, role seeding, AppRoles
 ├── {Feature}/                # one folder per feature
@@ -193,7 +193,7 @@ public partial class Program;
 
 - **DATA-01** One `AppDbContext` in `Data/`, namespace `{App}.Api.Data`, with migrations in `Data/Migrations/`. `OnModelCreating` calls `base.OnModelCreating` and `ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`, nothing else. `[review]`
 - **DATA-02** One file per entity in `Data/`: the entity class and its `IEntityTypeConfiguration<T>` in the same file, named after the entity (`EntityA.cs`). Small enums and value types used only by that entity may live in the same file; anything used by several entities gets its own file. `ApplyConfigurationsFromAssembly` picks up the configurations. No data annotations for mapping. `[archtest]` + `[banned]` (mapping attributes)
-- **DATA-03** `AppDbContext` has no `DbSet` properties for entities. Each entity's file exposes its set through an internal extension (`db.Notes()` returns `db.Set<Note>()`). `[archtest]`
+- **DATA-03** `AppDbContext` exposes one `DbSet<T>` property per entity (`public DbSet<Note> Notes => Set<Note>();`). `AppUser` and `AppRole` use Identity's `Users` and `Roles`. No `db.X()` extension accessors. `[review]`
 - **DATA-04** Entity keys: default `long` identity columns. Use `Guid` v7 when the key is exposed publicly and enumeration matters, or the client creates the key (offline or idempotent create). Record the project default in the README. All entities in one aggregate use the same key type. `[review]`
 - **DATA-05** Guid keys are set in the app with `Guid.CreateVersion7()` and configured `ValueGeneratedNever()`. Never `Guid.NewGuid()` (v4, poor index locality). `[banned]` + `[archtest]` (EF model)
 - **DATA-06** EF calls are async: `SaveChangesAsync`, `ToListAsync`, `FirstOrDefaultAsync`, `MigrateAsync`. `[banned]` for `SaveChanges`/`Migrate`, `[review]` for sync LINQ.
@@ -258,7 +258,7 @@ An agent may call a change done only when all of these hold:
 - [ ] `dotnet build` passes with zero warnings (`TreatWarningsAsErrors`), including RS0030.
 - [ ] `dotnet test` passes, including architecture tests.
 - [ ] New feature (only when MOD-08 holds): `{Feature}Module.cs` exists and `Program.cs` calls its `AddXModule` and `MapXModule`.
-- [ ] New entity: one file in `Data/` named after it, with the entity, its configuration, and the `db.X()` accessor; migration added and reviewed.
+- [ ] New entity: one file in `Data/` named after it, with the entity and its configuration, plus a `DbSet<T>` on `AppDbContext`; migration added and reviewed.
 - [ ] New endpoint: name, summary, tag, permission or `AllowAnonymous`, antiforgery on unsafe verbs, `CancellationToken`, typed result union, 201 `CreatedAtRoute` for creates, expected failures as `TypedResults.Problem`.
 - [ ] New permission: constant in `{Feature}Permissions` and policy registered in `AddXModule`.
 - [ ] No entity in any request or response. No feature changes another feature's entities directly (MOD-05). No loop between features, nothing depends on `Reports/`, and every file's namespace matches its top-level folder.

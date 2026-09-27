@@ -22,7 +22,7 @@ src/{App}.Api/
 ├── Data/
 │   ├── AppDbContext.cs
 │   ├── AppUser.cs, AppRole.cs        # Identity entities
-│   ├── Note.cs                       # entity + NoteConfiguration + db.Notes()
+│   ├── Note.cs                       # entity + NoteConfiguration
 │   └── Migrations/
 ├── Identity/
 │   ├── IdentityModule.cs
@@ -45,12 +45,12 @@ tests/{App}.Api.Tests/
 
 ## Entity and configuration
 
-`Data/Note.cs`: the entity, its configuration, and its set accessor in one file named after the entity (DATA-02, DATA-03).
+`Data/Note.cs`: the entity and its configuration in one file named after the entity (DATA-02). The set is `db.Notes` on `AppDbContext` (DATA-03).
 
 ```csharp
 namespace {App}.Api.Data;
 
-internal sealed class Note
+public sealed class Note
 {
     public long Id { get; set; }
     public required string Title { get; set; }
@@ -73,11 +73,6 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
         builder.HasOne(x => x.Owner).WithMany(u => u.Notes).HasForeignKey(x => x.OwnerUserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
-}
-
-internal static class NoteSet
-{
-    public static DbSet<Note> Notes(this AppDbContext db) => db.Set<Note>();
 }
 ```
 
@@ -111,6 +106,8 @@ public sealed class AppRole : IdentityRole<Guid>
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<AppUser, AppRole, Guid>(options)
 {
+    public DbSet<Note> Notes => Set<Note>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -298,7 +295,7 @@ public static class NoteApi
         [Description("Filter by title.")] string? search, CancellationToken ct)
     {
         var userId = user.RequiredUserId;
-        var query = db.Notes().AsNoTracking().Where(n => n.OwnerUserId == userId);
+        var query = db.Notes.AsNoTracking().Where(n => n.OwnerUserId == userId);
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(n => EF.Functions.ILike(n.Title, $"%{search.Trim()}%"));
 
@@ -310,7 +307,7 @@ public static class NoteApi
     private static async Task<Results<Ok<NoteResponse>, NotFound>> GetNote(
         long id, AppDbContext db, CurrentUser user, CancellationToken ct)
     {
-        var note = await db.Notes().AsNoTracking()
+        var note = await db.Notes.AsNoTracking()
             .Where(n => n.Id == id && n.OwnerUserId == user.RequiredUserId)
             .Select(n => new NoteResponse(n.Id, n.Title, n.Body, n.CreatedAt, n.ArchivedAt))
             .FirstOrDefaultAsync(ct);
@@ -322,11 +319,11 @@ public static class NoteApi
     {
         var userId = user.RequiredUserId;
         var title = request.Title.Trim();
-        if (await db.Notes().AnyAsync(n => n.OwnerUserId == userId && n.Title == title, ct))
+        if (await db.Notes.AnyAsync(n => n.OwnerUserId == userId && n.Title == title, ct))
             return Problems.Conflict("Duplicate note", $"You already have a note titled '{title}'.");
 
         var note = new Note { Title = title, Body = request.Body, OwnerUserId = userId, CreatedAt = clock.GetUtcNow() };
-        db.Notes().Add(note);
+        db.Notes.Add(note);
         await db.SaveChangesAsync(ct);
 
         var body = new NoteResponse(note.Id, note.Title, note.Body, note.CreatedAt, null);
@@ -365,7 +362,7 @@ public sealed class NoteService(AppDbContext db, TimeProvider clock)
 {
     public async Task<Result> ArchiveAsync(long noteId, Guid userId, CancellationToken ct)
     {
-        var note = await db.Notes().FirstOrDefaultAsync(n => n.Id == noteId && n.OwnerUserId == userId, ct);
+        var note = await db.Notes.FirstOrDefaultAsync(n => n.Id == noteId && n.OwnerUserId == userId, ct);
         if (note is null) return Problems.NotFound("Note not found", $"Note {noteId} does not exist.");
         if (note.ArchivedAt is not null) return Problems.Conflict("Already archived", "This note is already archived.");
 
@@ -455,7 +452,7 @@ internal sealed class ArchiveOldNotesJob(IServiceScopeFactory scopes, TimeProvid
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var cutoff = clock.GetUtcNow().AddDays(-365);
-            await db.Notes().Where(n => n.ArchivedAt == null && n.CreatedAt < cutoff)
+            await db.Notes.Where(n => n.ArchivedAt == null && n.CreatedAt < cutoff)
                 .ExecuteUpdateAsync(u => u.SetProperty(n => n.ArchivedAt, clock.GetUtcNow()), ct);
         }
     }
