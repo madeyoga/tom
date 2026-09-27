@@ -9,8 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Tom.WebApi.Api.Identity;
-using Tom.WebApi.Api.Infrastructure.Data;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 
 namespace Tom.WebApi.Api.Tests.Architecture;
@@ -49,10 +48,10 @@ public sealed class TypeRulesTests
     }
 
     [Fact]
-    public void Module_interfaces_have_two_implementations_or_an_allowance()
+    public void Feature_interfaces_have_two_implementations_or_an_allowance()
     {
         var failures = new List<string>();
-        foreach (var iface in Arch.Types.Where(type => type.IsInterface && Arch.ModuleOf(type) is not null))
+        foreach (var iface in Arch.Types.Where(type => type.IsInterface && Arch.FeatureOf(type) is not null))
         {
             var implementations = Arch.Api.GetTypes()
                 .Count(type => type.IsClass && !type.IsAbstract && iface.IsAssignableFrom(type));
@@ -82,34 +81,34 @@ public sealed class TypeRulesTests
             Assert.True(declaring.IsAbstract && declaring.IsSealed, declaring.FullName);
             Assert.True(declaring.IsPublic, declaring.FullName);
             Assert.EndsWith("Api", declaring.Name);
-            Assert.NotNull(Arch.ModuleOf(declaring));
+            Assert.NotNull(Arch.FeatureOf(declaring));
         }
     }
 
     [Fact]
-    public void Every_module_has_add_and_map_methods()
+    public void Every_feature_has_add_and_map_methods()
     {
         var program = File.ReadAllText(Path.Combine(Arch.ApiProjectDirectory, "Program.cs"));
-        Assert.NotEmpty(Arch.Modules);
-        foreach (var module in Arch.Modules)
+        Assert.NotEmpty(Arch.Features);
+        foreach (var feature in Arch.Features)
         {
-            var type = Arch.Api.GetType($"{Arch.Root}.{module}.{module}Module");
+            var type = Arch.Api.GetType($"{Arch.Root}.{feature}.{feature}Module");
             Assert.NotNull(type);
             Assert.True(type.IsAbstract && type.IsSealed);
-            Assert.Equal($"{Arch.Root}.{module}", type.Namespace);
+            Assert.Equal($"{Arch.Root}.{feature}", type.Namespace);
 
-            var add = type.GetMethod($"Add{module}Module", BindingFlags.Public | BindingFlags.Static);
+            var add = type.GetMethod($"Add{feature}Module", BindingFlags.Public | BindingFlags.Static);
             Assert.NotNull(add);
             var addParameters = add.GetParameters();
             Assert.Equal(typeof(IServiceCollection), addParameters[0].ParameterType);
             Assert.Equal(typeof(IConfiguration), addParameters[1].ParameterType);
 
-            var map = type.GetMethod($"Map{module}Module", BindingFlags.Public | BindingFlags.Static);
+            var map = type.GetMethod($"Map{feature}Module", BindingFlags.Public | BindingFlags.Static);
             Assert.NotNull(map);
             Assert.Equal(typeof(IEndpointRouteBuilder), map.GetParameters()[0].ParameterType);
 
-            Assert.Contains($"Add{module}Module", program, StringComparison.Ordinal);
-            Assert.Contains($"Map{module}Module", program, StringComparison.Ordinal);
+            Assert.Contains($"Add{feature}Module", program, StringComparison.Ordinal);
+            Assert.Contains($"Map{feature}Module", program, StringComparison.Ordinal);
         }
     }
 
@@ -137,16 +136,6 @@ public sealed class TypeRulesTests
         Assert.NotEmpty(values);
         Assert.Equal(values.Length, values.Distinct(StringComparer.Ordinal).Count());
         Assert.All(values, value => Assert.Matches(pattern, value));
-    }
-
-    [Fact]
-    public void DbContext_has_no_module_dbsets()
-    {
-        var sets = typeof(AppDbContext)
-            .GetProperties(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.PropertyType.IsGenericType
-                && property.PropertyType.GetGenericTypeDefinition() == typeof(DbSet<>));
-        Assert.Empty(sets);
     }
 
     [Fact]

@@ -116,9 +116,10 @@ Not bannable: `Guid.NewGuid()` only for keys (the ban is project-wide; suppress 
 root = true
 
 [*.cs]
-# STR-03 namespace matches folder
-dotnet_diagnostic.IDE0130.severity = warning
-dotnet_style_namespace_match_folder = true
+# STR-03/STR-07 namespace = top-level folder, checked by the 4.8 source scan.
+# IDE0130 wants a segment per subfolder (Apis/, Services/, Data/ subfolders), so it stays off.
+dotnet_diagnostic.IDE0130.severity = none
+dotnet_style_namespace_match_folder = false
 csharp_style_namespace_declarations = file_scoped:warning
 
 # API-08 forward CancellationToken
@@ -166,7 +167,7 @@ Optional third-party: `Meziantou.Analyzer` adds async and string-comparison chec
 
 ## 4. Architecture tests
 
-Put them in `tests/{App}.Api.Tests/Architecture/`. The test project uses `Microsoft.NET.Sdk`, so `IHostedService` needs `using Microsoft.Extensions.Hosting;`. Packages: `NetArchTest.Rules` 1.3.2 for type dependencies (Mono.Cecil, reads method bodies). Everything else is plain reflection plus the running app from `ApiFactory`. `TngTech.ArchUnitNET` + `TngTech.ArchUnitNET.xUnit` 0.13.4 is the alternative if you prefer its fluent rules; do not use both.
+Put them in `tests/{App}.Api.Tests/Architecture/`. The test project uses `Microsoft.NET.Sdk`, so `IHostedService` needs `using Microsoft.Extensions.Hosting;`. Packages: `NetArchTest.Rules` 1.3.2 for type dependencies (Mono.Cecil, reads method bodies). `Microsoft.CodeAnalysis.CSharp` 5.9.0 for the folder-based source scans (4.8). Everything else is plain reflection plus the running app from `ApiFactory`. `TngTech.ArchUnitNET` + `TngTech.ArchUnitNET.xUnit` 0.13.4 is the alternative if you prefer its fluent rules; do not use both.
 
 Shared helper:
 
@@ -175,32 +176,22 @@ internal static class Arch
 {
     public static readonly Assembly Api = typeof(Program).Assembly;
     public const string Root = "{App}.Api";
-    private static readonly string[] NonModules = ["Infrastructure", "Shared", "Migrations"];
+    public static readonly string[] Layers = ["Infrastructure", "Shared", "Data"];
 
     public static IReadOnlyList<Type> Types { get; } = Api.GetTypes()
         .Where(t => t.Namespace?.StartsWith(Root, StringComparison.Ordinal) == true)
         .Where(t => !t.IsDefined(typeof(CompilerGeneratedAttribute), false))
         .ToArray();
 
-    public static string? ModuleOf(Type t)
+    public static string? FeatureOf(Type t)
     {
         var parts = t.Namespace?.Split('.') ?? [];
         var depth = Root.Split('.').Length;
-        return parts.Length > depth && !NonModules.Contains(parts[depth]) ? parts[depth] : null;
+        return parts.Length > depth && !Layers.Contains(parts[depth]) ? parts[depth] : null;
     }
 
-    public static IReadOnlyList<string> Modules { get; } =
-        Types.Select(ModuleOf).OfType<string>().Distinct().Order().ToArray();
-
-    // Prefix match: {Root}.{Module} and every subnamespace (Models, Apis, Services after a MOD-07 split).
-    public static bool InNamespace(Type t, string ns)
-        => t.Namespace is { } n && (n == ns || n.StartsWith(ns + ".", StringComparison.Ordinal));
-
-    public static bool InModule(Type t, string module) => InNamespace(t, $"{Root}.{module}");
-
-    // Only {Root}.{Module}.Contracts and its subnamespaces. A deeper folder named Contracts does not count.
-    public static bool IsContracts(Type t)
-        => ModuleOf(t) is { } m && InNamespace(t, $"{Root}.{m}.Contracts");
+    public static IReadOnlyList<string> Features { get; } =
+        Types.Select(FeatureOf).OfType<string>().Distinct().Order().ToArray();
 }
 ```
 
@@ -208,36 +199,30 @@ internal static class Arch
 
 | Rule | Test |
 |---|---|
-| MOD-03 | For each module A and each other module B: types in A (except `*Configuration`) have no dependency on any top-level, non-Contracts type of B. |
-| MOD-06 | Types in `{Root}.Shared` have no dependency on any module namespace. |
-| CODE-05 | Types in module namespaces, except `IHostedService` implementations (including `BackgroundService` subclasses) and `*Module` classes, do not depend on `System.IServiceProvider`, the `GetService`/`GetRequiredService` extension classes, or `IServiceScopeFactory`/`IServiceScope`. |
+| MOD-03, MOD-06, MOD-13 | Types in `{Root}.Data` (including `Data.Migrations`) do not depend on any feature namespace or on `{Root}.Infrastructure`. Types in `{Root}.Infrastructure` do not depend on any feature namespace. Types in `{Root}.Shared` depend on no feature, `Data`, or `Infrastructure` namespace. |
+| CODE-05 | Types in feature namespaces, except `IHostedService` implementations (including `BackgroundService` subclasses) and `*Module` classes, do not depend on `System.IServiceProvider`, the `GetService`/`GetRequiredService` extension classes, or `IServiceScopeFactory`/`IServiceScope`. |
 | STR-05 | No type inherits `Microsoft.AspNetCore.Mvc.ControllerBase` (backs up the ban). |
 
 ```csharp
 [Fact]
-public void Modules_use_only_other_modules_contracts()
+public void Lower_layers_do_not_depend_on_features()
 {
-    var failures = new List<string>();
-    foreach (var a in Arch.Modules)
-    foreach (var b in Arch.Modules.Where(m => m != a))
-    {
-        // NetArchTest matches dependencies by dotted segments, so list B's non-Contracts types by full name.
-        var forbidden = Arch.Types
-            .Where(t => Arch.InModule(t, b) && !Arch.IsContracts(t) && !t.IsNested)
-            .Select(t => t.FullName!)
-            .ToArray();
-        if (forbidden.Length == 0) continue;
+    string[] features = [.. Arch.Features.Select(f => $"{Arch.Root}.{f}")];
+    (string Layer, string[] Forbidden)[] rules =
+    [
+        ("Data", [.. features, $"{Arch.Root}.Infrastructure"]),
+        ("Infrastructure", features),
+        ("Shared", [.. features, $"{Arch.Root}.Data", $"{Arch.Root}.Infrastructure"]),
+    ];
 
-        var result = Types.InAssembly(Arch.Api)
-            .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.{Regex.Escape(a)}(\..+)?$") // module A + subnamespaces
-            .And().DoNotHaveNameEndingWith("Configuration") // HasOne<Other>() FK only, see module-boundaries.md
-            .ShouldNot().HaveDependencyOnAny(forbidden)
-            .GetResult();
+    var failures = rules
+        .SelectMany(r => Types.InAssembly(Arch.Api)
+            .That().ResideInNamespaceMatching($@"^{Regex.Escape($"{Arch.Root}.{r.Layer}")}(\..+)?$")
+            .ShouldNot().HaveDependencyOnAny(r.Forbidden)
+            .GetResult().FailingTypeNames ?? [])
+        .ToArray();
 
-        if (!result.IsSuccessful)
-            failures.AddRange(result.FailingTypeNames.Select(n => $"{n} -> {b} internals"));
-    }
-    Assert.Empty(failures);
+    Assert.True(failures.Length == 0, string.Join(", ", failures));
 }
 
 // NetArchTest does not see IServiceProvider when it only appears as a property return type
@@ -264,7 +249,7 @@ public void Business_code_does_not_use_the_service_locator()
         .ToHashSet();
 
     var result = Types.InAssembly(Arch.Api)
-        .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.(?!(Infrastructure|Shared|Migrations)(\.|$))[^.]+(\..+)?$")
+        .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.(?!(Infrastructure|Shared|Data)(\.|$))[^.]+(\..+)?$")
         .ShouldNot().HaveDependencyOnAny(Locator)
         .GetResult();
 
@@ -273,9 +258,9 @@ public void Business_code_does_not_use_the_service_locator()
 }
 ```
 
-Both tests match by namespace prefix: `{Root}.{Module}` plus any `.{Sub}` below it, so MOD-07 subfolders are inside the module, and the Contracts exception covers `{Root}.{Module}.Contracts` and its subnamespaces only. The regex anchors on a dot, so module `Notes` does not also match `NotesArchive`. On the forbidden side, NetArchTest matches dependency names by dotted segments, so listing a type's full name also covers its nested types.
+Matching by namespace is safe because every file in a top-level folder uses that folder's single namespace (STR-07, checked in 4.8). The regex anchors on a dot, and NetArchTest matches dependency names by dotted segments, so feature `Notes` does not also match `NotesArchive`. Dependencies between features are a source scan (4.8), because it also sees `using` directives and names in files that compile to no IL dependency.
 
-Verified with NetArchTest.Rules 1.3.2: `ResideInNamespaceMatching` and `FailingTypeNames` exist; dependencies inside async methods and lambdas count for the declaring type; a `{Module}.Models` subnamespace counts as the module; `{Module}.Models.Contracts` is not treated as Contracts; a module named `NotesArchive` is not matched as `Notes`. The original CODE-05 version (`DoNotImplementInterface(typeof(IHostedService))` + `HaveDependencyOn("System.IServiceProvider")`) missed `scope.ServiceProvider.GetRequiredService<T>()` in async code and did not exempt `BackgroundService` subclasses.
+Verified with NetArchTest.Rules 1.3.2: `ResideInNamespaceMatching` and `FailingTypeNames` exist; dependencies inside async methods and lambdas count for the declaring type; a feature named `NotesArchive` is not matched as `Notes`. The original CODE-05 version (`DoNotImplementInterface(typeof(IHostedService))` + `HaveDependencyOn("System.IServiceProvider")`) missed `scope.ServiceProvider.GetRequiredService<T>()` in async code and did not exempt `BackgroundService` subclasses.
 
 ### 4.2 Reflection tests on types
 
@@ -283,12 +268,11 @@ Verified with NetArchTest.Rules 1.3.2: `ResideInNamespaceMatching` and `FailingT
 |---|---|
 | CODE-04 | No static field in `Arch.Types` that is neither `IsLiteral` nor `IsInitOnly`. No static property with a setter. No `static readonly` field whose type is an array, `List<>`, `Dictionary<,>`, `HashSet<>`, or other mutable collection. |
 | DI-04 | No `IHostedService` implementation has a constructor parameter assignable to `DbContext`. |
-| CODE-03, DATA-13 | Every interface declared in a module has at least two implementations in the assembly, or is listed in `AllowedSingleImplementationInterfaces` in the test with a reason. No type named `*Repository` or `*UnitOfWork`. |
-| API-01 | Every public static method named `Map*Api` is on a `public static class` named `*Api` in a module namespace. |
-| MOD-01 | Every module has a static class `{Module}Module` in namespace `{Root}.{Module}` exactly with `Add{Module}Module(IServiceCollection, IConfiguration)` and `Map{Module}Module(IEndpointRouteBuilder)`. `Program.cs` text contains both calls. |
+| CODE-03, DATA-13 | Every interface declared in the API project has at least two implementations in the assembly, or is listed in `AllowedSingleImplementationInterfaces` in the test with a reason. No type named `*Repository` or `*UnitOfWork`. |
+| API-01 | Every public static method named `Map*Api` is on a `public static class` named `*Api` in a feature namespace. |
+| MOD-01 | Every feature has a static class `{Feature}Module` in namespace `{Root}.{Feature}` exactly with `Add{Feature}Module(IServiceCollection, IConfiguration)` and `Map{Feature}Module(IEndpointRouteBuilder)`. `Program.cs` text contains both calls. |
 | AUTH-02 | `typeof(AppUser).BaseType == typeof(IdentityUser<Guid>)`, same for `AppRole`, `AppDbContext` derives from `IdentityDbContext<AppUser, AppRole, Guid>`, and `new AppUser().Id.Version == 7`. |
-| AUTH-07 | Every `{Module}Permissions` const matches `^[A-Z][A-Za-z]+\.[A-Z][A-Za-z]+$` and is unique. |
-| DATA-03 | `typeof(AppDbContext).GetProperties(BindingFlags.DeclaredOnly | Public | Instance)` has no `DbSet<>` property. |
+| AUTH-07 | Every `{Feature}Permissions` const matches `^[A-Z][A-Za-z]+\.[A-Z][A-Za-z]+$` and is unique. |
 | SEED-01 | Every `IDataSeeder` implementation is registered (see 4.4) and has a distinct `Order`. |
 | ERR-05 | No type in `Arch.Api` derives from `System.Exception`. Expected failures are `Result`/`ProblemHttpResult` values. |
 | ERR-01 | No type in `Arch.Api` implements `IExceptionHandler` (unexpected exceptions go to the default `UseExceptionHandler` + ProblemDetails). An added handler needs an allowlist entry with a reason. |
@@ -337,10 +321,10 @@ Read endpoints from the built app: `factory.Services.GetRequiredService<Endpoint
 | API-03 | Handler return type is not `IResult`, `Task<IResult>`, or `ValueTask<IResult>`. |
 | API-01, API-02 | Handler `MethodInfo.DeclaringType` is a static class named `*Api`. Handler is not compiler-generated (no lambdas), with an allowlist for exceptions. |
 | DTO-03 | Walk the handler return type and every non-service parameter type: unwrap `Task<>`, `ValueTask<>`, `Results<...>`, `Ok<>` and other generic arguments, then public properties recursively. No type in the EF model (`db.Model.GetEntityTypes().Select(e => e.ClrType)`) may appear. Use `IServiceProviderIsService` to skip injected parameters. |
-| DTO-02 | Every DTO found in that walk that belongs to a module is `sealed`, is a record (has `<Clone>$`), and its name does not end with `Dto`. |
+| DTO-02 | Every DTO found in that walk that belongs to a feature is `sealed`, is a record (has `<Clone>$`), and its name does not end with `Dto`. |
 | API-09 | Every POST whose route pattern ends at the collection (no trailing route parameter or verb segment after one) returns a union containing `Created<T>` or `CreatedAtRoute<T>`, not `Ok<T>`. |
 | ERR-03 | Handler return types that can fail include `ProblemHttpResult`, `ValidationProblem`, or `NotFound` in the union. Report-only: a union with only a success type is allowed. |
-| DTO-05 | Every module DTO in a handler signature is declared in the same module as the handler (prefix match, so `Apis/` subfolders count). `Shared` types (`PaginatedItems<T>`) are allowed. |
+| DTO-05 | Every feature DTO in a handler signature is declared in the same feature namespace as the handler (`Apis/` subfolders share it, STR-07). `Shared` types (`PaginatedItems<T>`) are allowed. |
 
 ```csharp
 private IEnumerable<RouteEndpoint> ApiEndpoints()
@@ -428,10 +412,9 @@ Capture descriptors with `factory.WithWebHostBuilder(b => b.ConfigureTestService
 
 | Rule | Check |
 |---|---|
-| MOD-04 | For every navigation in `db.Model` (`GetNavigations()`, `GetSkipNavigations()`), declaring and target CLR types are in the same module. Identity's own types count as module `Identity`. |
-| DATA-02 | Every entity CLR type in a module has exactly one `IEntityTypeConfiguration<T>` implementation in the same module (prefix match). |
-| DATA-05 | Every module entity with a `Guid` primary key has `ValueGenerated == ValueGenerated.Never`. |
-| DATA-04 | Report (not fail) the key types per module so a mixed aggregate is visible in the test output. Mixing is a review call. |
+| DATA-02 | Every entity CLR type in `{Root}.Data` has exactly one `IEntityTypeConfiguration<T>` implementation in `{Root}.Data`, except `AppUser` and `AppRole` when Identity's mapping is enough. No entity type lives outside `{Root}.Data`. The file placement is checked in 4.8. |
+| DATA-05 | Every entity with a `Guid` primary key has `ValueGenerated == ValueGenerated.Never`. |
+| DATA-04 | Report (not fail) the key types per entity so a mixed aggregate is visible in the test output. Mixing is a review call. |
 
 ### 4.6 Project and file scans
 
@@ -440,7 +423,7 @@ Find the repo root by walking up from `AppContext.BaseDirectory` to the `.sln`/`
 | Rule | Check |
 |---|---|
 | STR-01 | Exactly one non-test `.csproj` with `Sdk="Microsoft.NET.Sdk.Web"` and `net10.0`. |
-| STR-02, STR-04 | Top-level folders of the API project are only `Infrastructure`, `Shared`, `Migrations`, `Properties`, `bin`, `obj`, and module folders. No folder anywhere named `Controllers`, `DTOs`, `Dtos`, `Interfaces`, `Repositories`, or `Helpers`. `Models`, `Apis`, and `Services` appear only as direct children of a module folder. |
+| STR-02, STR-04 | Top-level folders of the API project are only `Infrastructure`, `Shared`, `Data`, `Properties`, `bin`, `obj`, and feature folders. `Migrations` appears only as `Data/Migrations`. No folder anywhere named `Controllers`, `DTOs`, `Dtos`, `Interfaces`, `Repositories`, `Helpers`, `Models`, `Entities`, or `Contracts`. `Apis` and `Services` appear only as direct children of a feature folder. Subfolders of `Data/` are allowed (DATA-16). |
 | DOC-02 | `appsettings.json` and `appsettings.Production.json` do not set `OpenApi:Enabled` to `true`. `Program.cs` maps OpenAPI only inside the `IsDevelopment() || OpenApi:Enabled` condition (text check). |
 | STR-06, DOC-01 | API `.csproj` has no `PackageReference` to `Swashbuckle.*`, `MediatR`, `AutoMapper`, or `FluentValidation*`, and has `Microsoft.AspNetCore.OpenApi` and `Scalar.AspNetCore`. |
 | TEST-01 | Test `.csproj` references `Testcontainers.PostgreSql` and `Microsoft.AspNetCore.Mvc.Testing`, and not `Microsoft.EntityFrameworkCore.InMemory` or `Microsoft.EntityFrameworkCore.Sqlite`. |
@@ -455,58 +438,304 @@ Find the repo root by walking up from `AppContext.BaseDirectory` to the `.sln`/`
 | API-09 | `POST /api/notes` returns 201 with a `Location` header that resolves with GET (reference.md, `Create_returns_201_with_location`). |
 | DOC-02 | Under `UseEnvironment("Production")`, `GET /openapi/v1.json` returns 404 without `OpenApi:Enabled` and 200 with `OpenApi:Enabled=true` (reference.md, `OpenApiExposureTests`). |
 
+### 4.8 Source scans (Roslyn)
+
+Syntax-only scans of the `.cs` files, so they see folders and `using` directives, which reflection cannot. Package: `Microsoft.CodeAnalysis.CSharp` 5.9.0 in the test project. No compilation or semantic model is needed.
+
+| Rule | Check |
+|---|---|
+| STR-03, STR-07 | Every file under a top-level folder of the API project declares exactly `{Root}.{Folder}`. Project-root files (`Program.cs`, global usings) and EF-generated files in `Data/Migrations/` are skipped. |
+| MOD-11, MOD-13 | The feature graph has no cycle. Feature A depends on feature B when a file in `A/` has a qualified name starting with `{Root}.B` (a `using`, a parameter, a call) or names a type declared under `B/` that A does not declare itself. `Program.cs`, `Infrastructure/`, `Data/`, and `Shared/` are not part of the graph. |
+| MOD-09, MOD-13 | No file outside `Reports/` depends on `Reports/`, by the same measure. Project-root files compose every feature and are skipped. |
+| DATA-02, MOD-13 | Every file in `Data/` (outside `Migrations/`) declares a top-level type named after the file (the part before the first dot, so `AppDbContext.Sets.cs` counts as `AppDbContext`), and every `IEntityTypeConfiguration<T>` sits in `T.cs`. |
+| DATA-14 | No `QueryExpressionSyntax` (`from ... select`) in any `.cs` file under the repo root. |
+
+```csharp
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+internal sealed record SourceFile(string Path, CompilationUnitSyntax Root)
+{
+    public string? TopFolder => Path.IndexOf('/') is var i and > 0 ? Path[..i] : null;
+
+    public bool IsGenerated => Path.StartsWith("Data/Migrations/", StringComparison.Ordinal);
+}
+
+internal static class Source
+{
+    public static readonly string RepoRoot = FindRepoRoot();
+    public static readonly string ApiDir = System.IO.Path.Combine(RepoRoot, "src", Arch.Root);
+
+    public static IReadOnlyList<SourceFile> ApiFiles { get; } = Parse(ApiDir);
+
+    public static IReadOnlyList<SourceFile> Parse(string dir) => Directory
+        .EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories)
+        .Select(p => System.IO.Path.GetRelativePath(dir, p).Replace('\\', '/'))
+        .Where(p => !p.Split('/').Any(s => s is "bin" or "obj"))
+        .Select(p => new SourceFile(p, CSharpSyntaxTree.ParseText(File.ReadAllText(System.IO.Path.Combine(dir, p))).GetCompilationUnitRoot()))
+        .ToArray();
+
+    private static string FindRepoRoot()
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d is not null; d = d.Parent)
+            if (d.EnumerateFiles("*.sln").Any() || d.EnumerateFiles("*.slnx").Any()) return d.FullName;
+        throw new InvalidOperationException("No .sln or .slnx above the test output directory.");
+    }
+}
+
+internal static class FolderGraph
+{
+    private static readonly Dictionary<string, HashSet<string>> Declared = Source.ApiFiles
+        .Where(f => f.TopFolder is not null)
+        .GroupBy(f => f.TopFolder!)
+        .ToDictionary(g => g.Key, g => g
+            .SelectMany(f => f.Root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+            .Select(t => t.Identifier.Text)
+            .ToHashSet());
+
+    public static bool IsFeature(string? folder) => folder is not null && !Arch.Layers.Contains(folder);
+
+    // Top-level folders a file uses: qualified names ({Root}.X... in usings, parameters, or calls),
+    // plus type names declared only under X/.
+    public static IEnumerable<string> DependenciesOf(SourceFile f)
+    {
+        HashSet<string> own = f.TopFolder is { } top && Declared.TryGetValue(top, out var names) ? names : [];
+        var prefix = Arch.Root + ".";
+        var qualified = f.Root.DescendantNodes()
+            .Where(n => n is QualifiedNameSyntax or MemberAccessExpressionSyntax)
+            .Select(n => n.ToString())
+            .Where(n => n.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(n => n[prefix.Length..].Split('.')[0]);
+        var used = f.Root.DescendantNodes().OfType<SimpleNameSyntax>()
+            .Where(IsTypePosition)
+            .Select(n => n.Identifier.Text)
+            .Where(n => !own.Contains(n))
+            .ToHashSet();
+        var byName = Declared.Where(d => d.Value.Overlaps(used)).Select(d => d.Key);
+        return qualified.Concat(byName).Where(d => d != f.TopFolder).Distinct();
+    }
+
+    // Skip member names: x.Name, { Name = ... } initializers, and Name: arguments.
+    private static bool IsTypePosition(SimpleNameSyntax n) => n.Parent switch
+    {
+        MemberAccessExpressionSyntax m => m.Expression == n,
+        NameColonSyntax => false,
+        AssignmentExpressionSyntax a => !(a.Left == n && a.Parent is InitializerExpressionSyntax),
+        _ => true,
+    };
+}
+```
+
+```csharp
+public class SourceTests
+{
+    [Fact]
+    public void No_feature_dependency_cycles()
+    {
+        var edges = Source.ApiFiles
+            .Where(f => FolderGraph.IsFeature(f.TopFolder))
+            .SelectMany(f => FolderGraph.DependenciesOf(f).Where(FolderGraph.IsFeature).Select(d => (From: f.TopFolder!, To: d)))
+            .Distinct()
+            .ToLookup(e => e.From, e => e.To);
+
+        var cycles = new List<string>();
+        var done = new HashSet<string>();
+        void Visit(string node, List<string> path)
+        {
+            if (path.IndexOf(node) is var i and >= 0) { cycles.Add(string.Join(" -> ", path[i..].Append(node))); return; }
+            if (!done.Add(node)) return;
+            path.Add(node);
+            foreach (var next in edges[node]) Visit(next, path);
+            path.RemoveAt(path.Count - 1);
+        }
+        foreach (var feature in edges.Select(g => g.Key).Order()) Visit(feature, []);
+
+        Assert.True(cycles.Count == 0, string.Join(Environment.NewLine, cycles));
+    }
+
+    // Program.cs and other project-root files compose every feature, so they are skipped.
+    [Fact]
+    public void Nothing_depends_on_reports()
+    {
+        var failures = Source.ApiFiles
+            .Where(f => f.TopFolder is not null && f.TopFolder != "Reports")
+            .Where(f => FolderGraph.DependenciesOf(f).Contains("Reports"))
+            .Select(f => f.Path)
+            .ToArray();
+
+        Assert.True(failures.Length == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void Namespace_matches_top_level_folder()
+    {
+        var failures = Source.ApiFiles
+            .Where(f => f.TopFolder is not null && !f.IsGenerated)
+            .SelectMany(f => f.Root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
+                .Select(n => n.Name.ToString())
+                .DefaultIfEmpty("(global)")
+                .Where(ns => ns != $"{Arch.Root}.{f.TopFolder}")
+                .Select(ns => $"{f.Path}: {ns}, expected {Arch.Root}.{f.TopFolder}"))
+            .ToArray();
+
+        Assert.True(failures.Length == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void Data_files_are_named_after_their_type()
+    {
+        var failures = new List<string>();
+        foreach (var f in Source.ApiFiles.Where(f => f.TopFolder == "Data" && !f.IsGenerated))
+        {
+            var name = System.IO.Path.GetFileName(f.Path).Split('.')[0];
+            var types = f.Root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+                .Where(t => t.Parent is BaseNamespaceDeclarationSyntax or CompilationUnitSyntax)
+                .ToArray();
+            if (!types.Any(t => t.Identifier.Text == name))
+                failures.Add($"{f.Path}: declares no type named {name}");
+
+            var configured = types
+                .SelectMany(t => t.BaseList is { } list ? list.Types.Select(b => b.Type) : [])
+                .OfType<GenericNameSyntax>()
+                .Where(g => g.Identifier.Text == "IEntityTypeConfiguration")
+                .Select(g => g.TypeArgumentList.Arguments[0].ToString());
+            failures.AddRange(configured.Where(c => c != name).Select(c => $"{f.Path}: configuration for {c} belongs in {c}.cs"));
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    [Fact]
+    public void Queries_use_method_syntax()
+    {
+        var failures = Source.Parse(Source.RepoRoot)
+            .SelectMany(f => f.Root.DescendantNodes().OfType<QueryExpressionSyntax>()
+                .Select(q => $"{f.Path}:{q.GetLocation().GetLineSpan().StartLinePosition.Line + 1}"))
+            .ToArray();
+
+        Assert.True(failures.Length == 0, string.Join(Environment.NewLine, failures));
+    }
+}
+```
+
+The dependency scan matches simple names, so it has limits: a member named like another feature's type is skipped only in `x.Name`, `{ Name = ... }` initializers, and `Name:` arguments; a type name declared in two features counts for both; and a value reached through `var` is not named, so only the call that produced it counts. Keep type names unique across features. `.Join` (DATA-14) stays with review, because `string.Join` shares the name.
+
+### 4.9 Optional: project-specific write-ownership scan
+
+MOD-05 is a review rule by default. For a property whose changes must stay in one feature (a balance field only its owning feature may change), add a scan like this with the project's own names. It flags assignments, compound assignments, `++`/`--`, object initializers, and `ExecuteUpdate`'s `SetProperty(x => x.Property, ...)` outside the owner. `Data/` and the layers are not scanned.
+
+```csharp
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+public class WriteOwnershipTests
+{
+    private const string Owner = "FeatureA";
+    private const string Property = "Balance";
+
+    // Files that assign a different member with the same name. Each entry says why.
+    private static readonly HashSet<string> Allowed =
+    [
+        // "FeatureB/SomeApi.cs", // SomeResponse.Balance is a DTO property, not EntityA.Balance
+    ];
+
+    [Fact]
+    public void Only_the_owner_changes_EntityA_balance()
+    {
+        var failures = Source.ApiFiles
+            .Where(f => FolderGraph.IsFeature(f.TopFolder) && f.TopFolder != Owner && !Allowed.Contains(f.Path))
+            .SelectMany(f => f.Root.DescendantNodes()
+                .Where(Writes)
+                .Select(n => $"{f.Path}:{n.GetLocation().GetLineSpan().StartLinePosition.Line + 1}"))
+            .ToArray();
+
+        Assert.True(failures.Length == 0, string.Join(Environment.NewLine, failures));
+    }
+
+    // Assignments (=, +=, ...), ++/--, and ExecuteUpdate's SetProperty(x => x.Balance, ...).
+    private static bool Writes(SyntaxNode n) => n switch
+    {
+        AssignmentExpressionSyntax a => Target(a.Left) == Property,
+        PrefixUnaryExpressionSyntax u when u.IsKind(SyntaxKind.PreIncrementExpression) || u.IsKind(SyntaxKind.PreDecrementExpression)
+            => Target(u.Operand) == Property,
+        PostfixUnaryExpressionSyntax u => Target(u.Operand) == Property,
+        InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: "SetProperty" } } i
+            => i.ArgumentList.Arguments.FirstOrDefault()?.Expression is SimpleLambdaExpressionSyntax { Body: ExpressionSyntax body }
+               && Target(body) == Property,
+        _ => false,
+    };
+
+    private static string? Target(ExpressionSyntax e) => e switch
+    {
+        MemberAccessExpressionSyntax m => m.Name.Identifier.Text,
+        IdentifierNameSyntax i => i.Identifier.Text,
+        _ => null,
+    };
+}
+```
+
+It matches by member name, not by type, so a DTO with a same-named property is a false positive: add that file to the allowlist with a reason, or rename the DTO property.
+
+Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, NetArchTest.Rules 1.3.2, and Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 in a scratch solution with this layout (the reference.md `Note`, `AppUser`, `DbTransactions`, `NoteService`, and navigation-based report query compiled, and the report query translated to SQL). Each test in 4.1 (layers), 4.8, and 4.9 failed on a deliberate violation and passed once it was fixed: `Data/` and `Shared/` referencing a feature or `Data`, a `FeatureA -> FeatureB -> FeatureA` loop (through a fully qualified call, a `using`, and a global using), a feature using a `Reports/` type, a `Models`-style sub-namespace, a `Data/` file named after no type with a misplaced configuration, a query expression, and a `Balance` write through `-=`, an initializer, and `SetProperty` outside the owner. A one-way `FeatureB -> FeatureA` call, `Program.cs` registering `Reports`, and `{Root}.Data.Migrations` did not fail.
+
 ## 5. Rule map
 
 | Rule | Check | Rule | Check |
 |---|---|---|---|
-| STR-01 | 4.6 | AUTH-05 | review |
-| STR-02 | 4.6 | AUTH-06 | 4.7 |
-| STR-03 | IDE0130 | AUTH-07 | 4.2, 4.3 |
-| STR-04 | 4.6 | AUTH-08 | review |
-| STR-05 | ban, 4.1 | DATA-01 | review |
-| STR-06 | 4.6 | DATA-02 | 4.5, ban (mapping attributes) |
-| MOD-01 | 4.2 | DATA-03 | 4.2 |
-| MOD-02 | review | DATA-04 | review (4.5 reports) |
-| MOD-03 | 4.1 | DATA-05 | ban `Guid.NewGuid`, 4.5 |
-| MOD-04 | 4.5 | DATA-06 | ban (SaveChanges, Migrate), review (sync LINQ) |
-| MOD-05 | review | DATA-07 | review |
-| MOD-06 | 4.1 | DATA-08 | ban (DateTime/DateTimeOffset now) |
-| MOD-07 | review (subfolders allowed by 4.6) | DATA-09 | ban (*Raw) |
-| PRG-01 | review | DATA-10 | ban (EnsureCreated), review |
-| PRG-02 | compile | DATA-11 | review |
-| API-01 | 4.2, 4.3 | DATA-12 | review |
-| API-02 | 4.3 (lambdas), review | DATA-13 | 4.2 |
-| API-03 | ban `Results`, 4.3 | CODE-01 | CA1822 |
-| API-04 | review (ASP0018/22/23 help) | CODE-02 | review |
-| API-05 | 4.3 | CODE-03 | 4.2 |
-| API-06 | 4.3 | CODE-04 | 4.2, review |
-| API-07 | 4.3 | CODE-05 | 4.1 |
-| API-08 | CA2016 | DI-01 | review |
-| API-09 | 4.3, 4.7 (creates), review | DI-02 | 4.4 (ValidateScopes) |
-| API-10 | review | DI-03 | 4.4 |
-| DTO-01 | review | DI-04 | 4.2 |
-| DTO-02 | 4.3 | DI-05 | ban `HttpClient` ctors |
-| DTO-03 | 4.3 | DI-06 | 4.4 |
-| DTO-04 | review | DI-07 | ban, ASP0000 |
-| DTO-05 | 4.3 | DI-08 | review |
-| DTO-06 | review | SEED-01 | 4.2, 4.4 |
-| ERR-01 | 4.2, 4.7 | SEED-02 | review |
-| ERR-02 | review | SEED-03 | review |
-| ERR-03 | 4.3 (report), review | DOC-01 | 4.6 |
-| ERR-04 | review | DOC-02 | 4.6, 4.7 |
-| ERR-05 | 4.2, review | DOC-03 | review |
-| ERR-06 | review | TEST-01 | 4.6 |
-| AUTH-01 | review | TEST-02 | review |
-| AUTH-02 | 4.2 | TEST-03 | review |
-| AUTH-03 | review | TEST-04 | review |
-| AUTH-04 | review | TEST-05 | CI runs the test project |
+| STR-01 | 4.6 | AUTH-03 | review |
+| STR-02 | 4.6 | AUTH-04 | review |
+| STR-03 | 4.8 | AUTH-05 | review |
+| STR-04 | 4.6 | AUTH-06 | 4.7 |
+| STR-05 | ban, 4.1 | AUTH-07 | 4.2, 4.3 |
+| STR-06 | 4.6 | AUTH-08 | review |
+| STR-07 | 4.8 | DATA-01 | review |
+| MOD-01 | 4.2 | DATA-02 | 4.5, 4.8, ban (mapping attributes) |
+| MOD-02 | review | DATA-03 | review |
+| MOD-03 | 4.1, 4.8 | DATA-04 | review (4.5 reports) |
+| MOD-04 | review, 4.8 (query syntax) | DATA-05 | ban `Guid.NewGuid`, 4.5 |
+| MOD-05 | review, optional 4.9 | DATA-06 | ban (SaveChanges, Migrate), review (sync LINQ) |
+| MOD-06 | 4.1 | DATA-07 | review |
+| MOD-07 | review (subfolders allowed by 4.6) | DATA-08 | ban (DateTime/DateTimeOffset now) |
+| MOD-08 | review | DATA-09 | ban (*Raw) |
+| MOD-09 | 4.8 | DATA-10 | ban (EnsureCreated), review |
+| MOD-10 | review | DATA-11 | review |
+| MOD-11 | 4.8 | DATA-12 | review |
+| MOD-12 | 4.8 (cycles), review (fix order) | DATA-13 | 4.2 |
+| MOD-13 | 4.1, 4.8 | DATA-14 | 4.8, review (`.Join`) |
+| PRG-01 | review | DATA-15 | review |
+| PRG-02 | compile | DATA-16 | review (subfolders allowed by 4.6) |
+| API-01 | 4.2, 4.3 | CODE-01 | CA1822 |
+| API-02 | 4.3 (lambdas), review | CODE-02 | review |
+| API-03 | ban `Results`, 4.3 | CODE-03 | 4.2 |
+| API-04 | review (ASP0018/22/23 help) | CODE-04 | 4.2, review |
+| API-05 | 4.3 | CODE-05 | 4.1 |
+| API-06 | 4.3 | DI-01 | review |
+| API-07 | 4.3 | DI-02 | 4.4 (ValidateScopes) |
+| API-08 | CA2016 | DI-03 | 4.4 |
+| API-09 | 4.3, 4.7 (creates), review | DI-04 | 4.2 |
+| API-10 | review | DI-05 | ban `HttpClient` ctors |
+| DTO-01 | review | DI-06 | 4.4 |
+| DTO-02 | 4.3 | DI-07 | ban, ASP0000 |
+| DTO-03 | 4.3 | DI-08 | review |
+| DTO-04 | review | SEED-01 | 4.2, 4.4 |
+| DTO-05 | 4.3 | SEED-02 | review |
+| DTO-06 | review | SEED-03 | review |
+| ERR-01 | 4.2, 4.7 | DOC-01 | 4.6 |
+| ERR-02 | review | DOC-02 | 4.6, 4.7 |
+| ERR-03 | 4.3 (report), review | DOC-03 | review |
+| ERR-04 | review | TEST-01 | 4.6 |
+| ERR-05 | 4.2, review | TEST-02 | review |
+| ERR-06 | review | TEST-03 | review |
+| AUTH-01 | review | TEST-04 | review |
+| AUTH-02 | 4.2 | TEST-05 | CI runs the test project |
 
 ## 6. Review-only rules
 
 These need judgment. Agents check them against the diff and list any deviation in the PR description.
 
-- Design: MOD-02, MOD-05, MOD-07, PRG-01, API-02 (beyond the lambda check), API-04, API-09, API-10, CODE-02, DI-01.
-- Data: DATA-01, DATA-04, DATA-06 (sync LINQ), DATA-07, DATA-10, DATA-11, DATA-12, DI-08.
+- Design: MOD-02, MOD-04 (`.Join`), MOD-05 (unless 4.9 is added), MOD-07, MOD-08, MOD-10, MOD-12 (fix order), PRG-01, API-02 (beyond the lambda check), API-04, API-09, API-10, CODE-02, DI-01.
+- Data: DATA-01, DATA-03, DATA-04, DATA-06 (sync LINQ), DATA-07, DATA-14 (`.Join`), DATA-15, DATA-16, DATA-10, DATA-11, DATA-12, DI-08.
 - Errors and security: ERR-02, ERR-03 (beyond the report), ERR-04, ERR-05 (throw sites), ERR-06, AUTH-01, AUTH-03 to AUTH-05, AUTH-08.
 - DTOs and docs: DTO-01, DTO-04, DTO-06, DOC-03.
 - Seeding and tests: SEED-02, SEED-03, TEST-02 to TEST-04.

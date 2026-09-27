@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Tom.WebApi.Api.Infrastructure.Data;
+using Tom.WebApi.Api.Data;
 
 namespace Tom.WebApi.Api.Tests.Architecture;
 
@@ -110,14 +110,14 @@ public sealed class EndpointRulesTests(ApiFactory factory)
     }
 
     [Fact]
-    public void Module_dtos_are_sealed_records_in_the_handler_module()
+    public void Feature_dtos_are_sealed_records_in_the_handler_feature()
     {
         var isService = factory.Services.GetRequiredService<IServiceProviderIsService>();
         var failures = new List<string>();
         foreach (var endpoint in ApiEndpoints())
         {
             var method = Handler(endpoint);
-            var handlerModule = Arch.ModuleOf(method.DeclaringType!);
+            var handlerFeature = Arch.FeatureOf(method.DeclaringType!);
             var types = method.GetParameters()
                 .Where(parameter => !isService.IsService(parameter.ParameterType)
                     && parameter.ParameterType != typeof(CancellationToken))
@@ -125,7 +125,7 @@ public sealed class EndpointRulesTests(ApiFactory factory)
                 .Append(method.ReturnType);
             foreach (var type in types.SelectMany(item => Reachable(item)).Distinct())
             {
-                if (Arch.ModuleOf(type) is not { } module)
+                if (Arch.FeatureOf(type) is not { } feature)
                 {
                     continue;
                 }
@@ -141,9 +141,9 @@ public sealed class EndpointRulesTests(ApiFactory factory)
                     failures.Add($"{type.FullName} on {endpoint.RoutePattern.RawText}");
                 }
 
-                if (module != handlerModule)
+                if (feature != handlerFeature)
                 {
-                    failures.Add($"{type.FullName} is used from module {handlerModule}");
+                    failures.Add($"{type.FullName} is used from feature {handlerFeature}");
                 }
             }
         }

@@ -2,13 +2,10 @@ using System.Text.Json.Serialization;
 using AuthEndpoints;
 using AuthEndpoints.Passkey;
 using Microsoft.AspNetCore.Antiforgery;
-using Tom.WebApi.Api.Identity;
-using Tom.WebApi.Api.Infrastructure.Data;
-using Tom.WebApi.Api.Infrastructure.Seeding;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
@@ -83,7 +80,6 @@ public static class InfrastructureSetup
         });
         services.AddPasskeyUserIdFactory(() => Guid.CreateVersion7().ToString());
 
-        services.AddTransient<IEmailSender<AppUser>, FileEmailSender>();
         services.Configure<AntiforgeryOptions>(options =>
         {
             options.HeaderName = "RequestVerificationToken";

@@ -2,21 +2,18 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using Tom.WebApi.Api.Infrastructure.Data;
+using Tom.WebApi.Api.Data;
 
 #nullable disable
 
-namespace Tom.WebApi.Api.Migrations
+namespace Tom.WebApi.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260926075156_Initial")]
-    partial class Initial
+    partial class AppDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -148,7 +145,7 @@ namespace Tom.WebApi.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Tom.WebApi.Api.Identity.AppRole", b =>
+            modelBuilder.Entity("Tom.WebApi.Api.Data.AppRole", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -174,7 +171,7 @@ namespace Tom.WebApi.Api.Migrations
                     b.ToTable("AspNetRoles", (string)null);
                 });
 
-            modelBuilder.Entity("Tom.WebApi.Api.Identity.AppUser", b =>
+            modelBuilder.Entity("Tom.WebApi.Api.Data.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -239,7 +236,7 @@ namespace Tom.WebApi.Api.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
-            modelBuilder.Entity("Tom.WebApi.Api.Notes.Note", b =>
+            modelBuilder.Entity("Tom.WebApi.Api.Data.Note", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -280,7 +277,7 @@ namespace Tom.WebApi.Api.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppRole", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -289,7 +286,7 @@ namespace Tom.WebApi.Api.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppUser", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -298,7 +295,7 @@ namespace Tom.WebApi.Api.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppUser", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -307,7 +304,7 @@ namespace Tom.WebApi.Api.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserPasskey<System.Guid>", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppUser", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -358,13 +355,13 @@ namespace Tom.WebApi.Api.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<System.Guid>", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppRole", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Tom.WebApi.Api.Identity.AppUser", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -373,20 +370,27 @@ namespace Tom.WebApi.Api.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppUser", null)
+                    b.HasOne("Tom.WebApi.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Tom.WebApi.Api.Notes.Note", b =>
+            modelBuilder.Entity("Tom.WebApi.Api.Data.Note", b =>
                 {
-                    b.HasOne("Tom.WebApi.Api.Identity.AppUser", null)
-                        .WithMany()
+                    b.HasOne("Tom.WebApi.Api.Data.AppUser", "Owner")
+                        .WithMany("Notes")
                         .HasForeignKey("OwnerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Tom.WebApi.Api.Data.AppUser", b =>
+                {
+                    b.Navigation("Notes");
                 });
 #pragma warning restore 612, 618
         }

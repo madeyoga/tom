@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 
-namespace Tom.WebApi.Api.Infrastructure.Auth;
+namespace Tom.WebApi.Api.Infrastructure;
 
 public static class PermissionPolicies
 {

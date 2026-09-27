@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 
-namespace Tom.WebApi.Api.Identity.Contracts;
+namespace Tom.WebApi.Api.Identity;
 
 public static class AppRoles
 {

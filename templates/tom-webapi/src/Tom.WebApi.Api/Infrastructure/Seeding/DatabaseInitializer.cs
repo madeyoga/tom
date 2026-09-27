@@ -1,8 +1,8 @@
-using Tom.WebApi.Api.Infrastructure.Data;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
-namespace Tom.WebApi.Api.Infrastructure.Seeding;
+namespace Tom.WebApi.Api.Infrastructure;
 
 internal sealed class DatabaseInitializer(
     IServiceScopeFactory scopes,

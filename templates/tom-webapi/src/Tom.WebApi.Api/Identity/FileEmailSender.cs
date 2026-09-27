@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Tom.WebApi.Api.Data;
 
 namespace Tom.WebApi.Api.Identity;
 

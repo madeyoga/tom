@@ -1,14 +1,14 @@
-using Tom.WebApi.Api.Infrastructure.Data;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
-namespace Tom.WebApi.Api.Notes.Contracts;
+namespace Tom.WebApi.Api.Notes;
 
-public sealed class NotesCommands(AppDbContext db, TimeProvider clock)
+public sealed class NoteService(AppDbContext db, TimeProvider clock)
 {
     public async Task<Result> ArchiveAsync(long noteId, Guid userId, CancellationToken cancellationToken)
     {
-        var note = await db.Notes().FirstOrDefaultAsync(
+        var note = await db.Notes.FirstOrDefaultAsync(
             item => item.Id == noteId && item.OwnerUserId == userId,
             cancellationToken);
         if (note is null)
