@@ -1,109 +1,97 @@
-# Module boundaries
+# Layers and feature boundaries
 
-Rules for what one module may use from another. IDs match SKILL.md. Checks are in enforceable-checks.md.
+What each layer may use, how features read and write data, and how to keep features from forming loops. IDs match SKILL.md. Checks are in enforceable-checks.md.
 
-## How the tests find a module
+## Layers
 
-The architecture tests match a module by its namespace prefix `{App}.Api.{Module}`, including every subnamespace. Subfolders from a MOD-07 split (`{Module}/Models/`, `{Module}/Apis/`, `{Module}/Services/`) count as part of the module. The Contracts exception matches `{App}.Api.{Module}.Contracts` and its subnamespaces only, so a folder called `Contracts` deeper inside a module is not a public surface.
-
-## Why tests, not `internal`
-
-All modules share one assembly, so `internal` does not stop module A from using module B's types. Mark entities, configurations, services, and endpoint DTOs `internal` where the compiler allows it. That keeps them out of the public surface and out of test-assembly reach. The actual boundary is enforced by architecture tests (MOD-03, MOD-04, DATA-03).
-
-Endpoint classes and HTTP DTOs can stay `public`. Minimal API handlers, System.Text.Json, and OpenAPI work with them either way, and public is less friction with the validation source generator.
-
-## The three kinds of folder
+```mermaid
+flowchart TB
+    F[Feature folders] --> I[Infrastructure / Shared]
+    F --> D[Data]
+    I --> D
+```
 
 | Folder | Contains | May depend on |
 |---|---|---|
-| `Shared/` | Shared kernel: `PaginatedItems<T>`, `PaginationRequest`, `Problems`, `Result<T>`/`Result`, `CurrentUser`, `IDataSeeder`, optional `IAuditable` | BCL, ASP.NET Core, EF Core abstractions. No module. |
-| `Infrastructure/` | `AppDbContext`, `AddInfrastructure`, auth setup, OpenAPI setup, `DatabaseInitializer`, optional `AuditableInterceptor` | `Shared/`, and module types only where it must compose them (`AppDbContext` inherits the Identity module's `AppUser`/`AppRole`) |
-| `{Module}/` | Entities, configurations, endpoints, services, seeders, permissions, `Contracts/` | `Shared/`, `Infrastructure/` (`AppDbContext` only), other modules' `Contracts/` |
+| `{Feature}/` (including `Identity/`, `Reports/`) | `{Feature}Module`, permissions, endpoints and their DTOs, services, seeders | `Infrastructure/`, `Shared/`, `Data/`, and other features' services in one direction (MOD-11). Nothing depends on `Reports/`. |
+| `Infrastructure/` | `AddInfrastructure`, auth wiring, dev-only OpenAPI/Scalar, error handling, `DatabaseInitializer`, the transaction helper | `Data/`, `Shared/`. No feature. |
+| `Shared/` | `Result<T>`/`Result`, `PaginatedItems<T>`, `PaginationRequest`, `Problems`, `CurrentUser`, `IDataSeeder`, small helpers | Nothing in the project (BCL, ASP.NET Core, EF Core abstractions only). |
+| `Data/` | Every entity with its configuration, `AppDbContext`, `Migrations/` | `Shared/` only. No feature, no `Infrastructure/`. |
 
-Keep `Shared/` small. Add a type there only when at least two modules need it and it has no business meaning. A "Customer" or "Money with currency rules" type belongs to a module, not to `Shared/`.
+A feature is a top-level folder, and every file in it uses the single namespace `{App}.Api.{Feature}` (STR-07). Tests find features as top-level folders (source scans) or top-level namespaces (type tests) that are not `Infrastructure`, `Shared`, or `Data`, so a new feature is checked without editing the tests.
 
-No base entity class. EF Core does not need one, and a base class tends to collect behavior that belongs to one module. If several entities need timestamps, implement `Shared/IAuditable` (`CreatedAt`, `UpdatedAt`) and let `Infrastructure/AuditableInterceptor` set them from `TimeProvider`.
+Keep `Shared/` small. Add a type there only when at least two features need it and it has no feature meaning. A type with rules of its own belongs to the feature that enforces them, or to `Data/` if it is part of an entity.
 
-## What a module may use from another module (MOD-03)
+## Data/
 
-Allowed:
-
-- Types in `{App}.Api.{B}.Contracts`: public records (`NoteSummary`), public enums, and one or more public concrete classes (`NotesQueries`, `NotesCommands`).
-- Permission constants in `{B}Permissions`, when module A's endpoint guards data that B owns. Prefer A's own permission.
-- IDs of B's rows (`long NoteId`, `Guid UserId`), stored as plain columns.
-
-Not allowed:
-
-- B's entities, `IEntityTypeConfiguration` classes, `db.B()` set accessors, services, seeders, or HTTP DTOs.
-- Queries on B's tables through `db.Set<BEntity>()` or raw SQL.
-- Writes to B's tables in any form.
-
-Contracts classes are concrete (no interface per service, DATA-13). Add an interface in `Contracts/` only when there is a real second implementation, for example a module that can be switched off and replaced by a no-op.
-
-Contracts return Contracts records, never entities. A Contracts method that can fail returns `Result<T>` or `Result` from `Shared/` (ERR-04), never throws. A Contracts class may use its own module's internals in its body.
-
-## Cross-module relationships (MOD-04)
-
-- Store the other module's key as a scalar: `public Guid OwnerUserId { get; set; }`. No navigation property to `AppUser` or to any other module's entity.
-- Keep the database FK constraint by default. Declare it in the referencing module's configuration without a navigation:
+- One file per entity: the entity, its `IEntityTypeConfiguration<T>`, and its `db.X()` accessor (DATA-03), in `Data/{Entity}.cs`. Small enums and value types used only by that entity may share the file. Anything used by several entities gets its own file, named after the type.
+- `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>` lives in `Data/AppDbContext.cs`. `OnModelCreating` calls `base.OnModelCreating(builder)` then `builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`, which also finds `internal` configuration classes with a parameterless constructor.
+- `AppUser` and `AppRole` are entities, so they live in `Data/` too. The `Identity/` feature owns their state (MOD-05).
+- Navigations are allowed in both directions (DATA-15). Configure each relationship once, in the file of the entity that holds the foreign key:
 
   ```csharp
-  builder.HasOne<AppUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+  builder.HasOne(x => x.Owner).WithMany(u => u.Notes).HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
   ```
 
-  This line is the only permitted reference to another module's entity type. The architecture test allows it only inside `IEntityTypeConfiguration<T>` classes.
-- To show data from another module, query your rows, collect the foreign IDs, and call B's Contracts class once for all of them (`UserDirectory.GetDisplayNamesAsync(ids, ct)`). No N+1 calls, no joins across module tables in LINQ.
-- Reports that must join across many modules are their own module (`Reports/`) and use read-only SQL views or Contracts queries. Document each such view in the module that owns the underlying tables.
+- Keep `Data/` flat. Past roughly 40 files, group by subfolder for navigation only (DATA-16). The namespace stays `{App}.Api.Data`, and a subfolder is not an ownership boundary.
+- Migrations: `dotnet ef migrations add {Name} --output-dir Data/Migrations`. The generated files are exempt from the namespace test.
 
-## Transactions across modules
+## Why tests, not `internal`
 
-`AppDbContext` is scoped, so every module in one request shares the same instance.
+All folders share one assembly, so `internal` does not stop one feature from using another's types. Mark entities, configurations, services, and endpoint DTOs `internal` where the compiler allows it. That keeps them out of the public surface. The layer rules are enforced by architecture tests (MOD-13); the write rule is a review rule (MOD-05).
 
-- A Contracts write method saves its own changes (`SaveChangesAsync`).
-- When one use case must change two modules atomically, the orchestrating handler or service opens the transaction:
+Endpoint classes and HTTP DTOs can stay `public`. Minimal API handlers, System.Text.Json, and OpenAPI work with them either way, and public is less friction with the validation source generator.
+
+## Reading data (MOD-04)
+
+- Any feature may read any entity. Start from the set you need and follow navigations: `db.EntitiesA().Where(a => a.Owner.IsActive).Select(a => new EntityAListItem(a.Id, a.Name, a.Owner.DisplayName))`.
+- Use method syntax only (DATA-14). Prefer navigations over `.Join`; `.Join` is discouraged and flagged in review.
+- Project to DTOs in the query (DTO-04). Use `.Include` only when you load entities to change them.
+- No N+1: one query per endpoint where possible, never a query per row in a loop.
+
+## Writing data (MOD-05, MOD-10)
+
+- Each entity has one owning feature. Only that feature creates, updates, or deletes it, and only that feature writes rows derived from it (history, audit, or running totals). Record the owner in the entity's file only if it is not obvious from the name.
+- Another feature that needs such a change calls the owning feature's service. The service takes the scoped `AppDbContext`, so both features share one instance per request.
+- When one command changes entities of two features, the orchestrating handler or service runs everything in one transaction with the `Infrastructure/` helper. The called service does not open its own transaction.
 
   ```csharp
-  await using var tx = await db.Database.BeginTransactionAsync(ct);
-  var archived = await notesCommands.ArchiveAsync(noteId, userId, ct);
-  if (archived.Problem is { } problem) return problem;        // tx disposes without commit = rollback
-  var recorded = await auditCommands.RecordAsync(..., ct);
-  if (recorded.Problem is { } auditProblem) return auditProblem;
-  await tx.CommitAsync(ct);
-  return TypedResults.NoContent();
+  var result = await db.InTransactionAsync(async ct =>
+  {
+      var changed = await featureBService.ApplyAsync(request.EntityBId, request.Amount, ct);
+      if (changed.Problem is { } problem) return problem;                // helper rolls back
+      db.EntitiesA().Add(new EntityA { EntityBId = request.EntityBId, CreatedAt = clock.GetUtcNow() });
+      await db.SaveChangesAsync(ct);
+      return Result.Success;
+  }, ct);
+  if (result.Problem is { } failed) return failed;
   ```
 
-  If `EnableRetryOnFailure` is on, wrap this in `db.Database.CreateExecutionStrategy().ExecuteAsync(...)`.
+- A project may add a source scan for its most important write rules, for example "only FeatureA assigns `EntityA.Balance`" (enforceable-checks.md, 4.9). Otherwise the rule is checked in review.
+
+## Loops between features (MOD-11, MOD-12)
+
+- Calls between features go one way. FeatureA may call FeatureB's service, but then FeatureB never calls FeatureA.
+- Reading is not a dependency: FeatureB reads FeatureA's entities through `Data/` without calling FeatureA.
+- To fix a loop: move a display read to `Reports/`, or read through navigations instead of calling the other feature, or keep a single service call in one direction. Merge the two features only when they keep changing each other's data, and record why in the PR.
+- `Reports/` reads anything and writes nothing. No feature and no lower layer depends on it.
 
 ## Direct calls vs events
 
-- Default: direct calls to the other module's Contracts class. They are visible, debuggable, and testable.
-- Add in-process events only when a module must react to another module without the publisher knowing about it (for example several modules clean up when a user is deleted). Then add a minimal `IEventPublisher` and `IEventHandler<TEvent>` pair in `Shared/`. Handlers run in the same request and scope, after the publisher saves. Event records live in the publisher's `Contracts/`.
+- Default: direct calls to the owning feature's service. They are visible, debuggable, and testable.
+- Add in-process events only when a feature must react to another without the publisher knowing about it (for example several features clean up when a user is deleted). Then add a minimal `IEventPublisher` and `IEventHandler<TEvent>` pair in `Shared/`. Handlers run in the same request and scope, inside the same transaction. Event records live in the publishing feature's folder. A handler in FeatureB for FeatureA's event makes B depend on A, so it counts for MOD-11.
 - No MediatR, message bus, or outbox until there is a second process that needs it.
 
-## DbContext layout
+## Identity as a feature
 
-- One `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>` in `Infrastructure/Data/`.
-- `OnModelCreating`: `base.OnModelCreating(builder)` then `builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`. `ApplyConfigurationsFromAssembly` also finds `internal` configuration classes that have a parameterless constructor.
-- No module `DbSet` properties on the context (DATA-03). Each module has:
+`Identity/` owns the state of `AppUser` and `AppRole` (in `Data/`), the users API, role seeding, and `AppRoles` constants. Other features may read users through navigations and may reference `AppRoles` in their permission policies, but they never inject `UserManager<AppUser>` or change users directly. `Shared/CurrentUser` exposes only `Guid? UserId` and permission checks from claims.
 
-  ```csharp
-  internal static class NotesDb
-  {
-      public static DbSet<Note> Notes(this AppDbContext db) => db.Set<Note>();
-  }
-  ```
+## Adding a feature
 
-- Optional schema per module. Pick it for the whole project, not per module. Set it in each configuration with `builder.ToTable("notes", NotesModule.Schema)`. Identity tables stay in the default schema. Migrations stay in one `Migrations/` folder and one migrations history table.
-
-## Identity as a module
-
-`Identity/` owns `AppUser`, `AppRole`, the users API, role seeding, and `Identity/Contracts/UserDirectory` (display names, existence checks). Other modules never inject `UserManager<AppUser>` or read `AppUser` directly. `Shared/CurrentUser` exposes only `Guid? UserId` and permission checks from claims.
-
-## Adding a module
-
-1. Create `{Module}/` with `{Module}Module.cs` (in the module's root namespace), `{Module}Permissions.cs`, and an empty `Contracts/` only if another module needs something.
-2. Add entities with configurations and the `{Module}Db` accessor.
-3. Add `{Resource}Api.cs` files and call them from `Map{Module}Module`.
-4. Call `Add{Module}Module` and `Map{Module}Module` in `Program.cs`.
-5. Split into `Models/`, `Apis/`, `Services/` later only when MOD-07 says so. Namespaces follow the folders.
-6. Run the architecture tests. The module list is discovered from top-level namespaces, so a new module is checked without editing the tests.
+1. Check MOD-08: own endpoints and own write rules. Otherwise extend the closest feature.
+2. Create `{Feature}/` with `{Feature}Module.cs` and `{Feature}Permissions.cs` (namespace `{App}.Api.{Feature}`).
+3. Add entities to `Data/`, one file each, and add a migration.
+4. Add `{Resource}Api.cs` files and a service for writes other features need. Call the APIs from `Map{Feature}Module`.
+5. Call `Add{Feature}Module` and `Map{Feature}Module` in `Program.cs`.
+6. Split into `Apis/` and `Services/` later only when MOD-07 says so. The namespace stays `{App}.Api.{Feature}`.
+7. Run the architecture tests.

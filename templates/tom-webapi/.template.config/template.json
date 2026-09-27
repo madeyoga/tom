@@ -25,7 +25,7 @@
         },
         {
           "choice": "full",
-          "description": "Lean guards plus NetArchTest architecture tests."
+          "description": "Lean guards plus architecture tests: NetArchTest layer rules and Roslyn source scans."
         }
       ],
       "defaultValue": "lean",

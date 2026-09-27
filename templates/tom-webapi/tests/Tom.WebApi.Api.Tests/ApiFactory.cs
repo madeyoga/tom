@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Tom.WebApi.Api.Identity;
+using Tom.WebApi.Api.Data;
 using Testcontainers.PostgreSql;
 
 namespace Tom.WebApi.Api.Tests;

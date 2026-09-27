@@ -1,4 +1,4 @@
-using Tom.WebApi.Api.Identity.Contracts;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 using Microsoft.AspNetCore.Identity;
 

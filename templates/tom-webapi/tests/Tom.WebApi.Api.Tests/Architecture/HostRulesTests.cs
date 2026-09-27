@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
-using Tom.WebApi.Api.Infrastructure.Data;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 
 namespace Tom.WebApi.Api.Tests.Architecture;
@@ -54,45 +54,23 @@ public sealed class HostRulesTests(ApiFactory factory)
     }
 
     [Fact]
-    public void Navigations_stay_inside_a_module()
+    public void Entities_live_in_data_with_one_configuration_and_guid_keys_are_app_generated()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var failures = new List<string>();
-        foreach (var entity in db.Model.GetEntityTypes())
+        var checkedEntities = 0;
+        foreach (var entity in db.Model.GetEntityTypes()
+            .Where(entity => entity.ClrType.Namespace?.StartsWith(Arch.Root, StringComparison.Ordinal) == true))
         {
-            foreach (var navigation in entity.GetNavigations().Cast<INavigationBase>().Concat(entity.GetSkipNavigations()))
-            {
-                var left = ModuleOfEntity(entity.ClrType);
-                var right = ModuleOfEntity(navigation.TargetEntityType.ClrType);
-                if (left != right)
-                {
-                    failures.Add($"{entity.ClrType.Name}.{navigation.Name} -> {navigation.TargetEntityType.ClrType.Name}");
-                }
-            }
-        }
-
-        Assert.Empty(failures);
-    }
-
-    [Fact]
-    public void Each_module_entity_has_one_configuration_and_guid_keys_are_app_generated()
-    {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        foreach (var entity in db.Model.GetEntityTypes())
-        {
-            if (Arch.ModuleOf(entity.ClrType) is not { } module)
-            {
-                continue;
-            }
+            checkedEntities++;
+            Assert.Equal($"{Arch.Root}.Data", entity.ClrType.Namespace);
 
             var configs = Arch.Types.Where(type => type.GetInterfaces().Any(iface =>
                 iface.IsGenericType
                 && iface.GetGenericTypeDefinition() == typeof(IEntityTypeConfiguration<>)
                 && iface.GenericTypeArguments[0] == entity.ClrType)).ToArray();
             Assert.Single(configs);
-            Assert.Equal(module, Arch.ModuleOf(configs[0]));
+            Assert.Equal($"{Arch.Root}.Data", configs[0].Namespace);
 
             var key = entity.FindPrimaryKey();
             if (key is { Properties.Count: 1 } && key.Properties[0].ClrType == typeof(Guid))
@@ -100,6 +78,8 @@ public sealed class HostRulesTests(ApiFactory factory)
                 Assert.Equal(ValueGenerated.Never, key.Properties[0].ValueGenerated);
             }
         }
+
+        Assert.True(checkedEntities > 0);
     }
 
     [Fact]
@@ -160,20 +140,5 @@ public sealed class HostRulesTests(ApiFactory factory)
         }
 
         return path;
-    }
-
-    private static string ModuleOfEntity(Type type)
-    {
-        if (Arch.ModuleOf(type) is { } module)
-        {
-            return module;
-        }
-
-        if (type.Namespace?.StartsWith("Microsoft.AspNetCore.Identity", StringComparison.Ordinal) == true)
-        {
-            return "Identity";
-        }
-
-        return type.FullName ?? type.Name;
     }
 }

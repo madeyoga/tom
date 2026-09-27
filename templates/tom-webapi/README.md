@@ -1,6 +1,6 @@
 # Tom.WebApi
 
-Opinionated ASP.NET Core 10 Web API solution. PostgreSQL, Identity with `Guid` keys (UUID v7 on create, including passkey sign-up), AuthEndpoints cookie sign-in, OpenAPI and Scalar in Development. Domain entities keep `long` primary keys. The `Notes` folder is a small example module; delete it and the `AddNotesModule` / `MapNotesModule` calls in `Program.cs` when you add a real feature.
+Opinionated ASP.NET Core 10 Web API solution. PostgreSQL, Identity with `Guid` keys (UUID v7 on create, including passkey sign-up), AuthEndpoints cookie sign-in, OpenAPI and Scalar in Development. Domain entities keep `long` primary keys. The `Notes` folder is a small example feature; delete it and the `AddNotesModule` / `MapNotesModule` calls in `Program.cs` when you add a real feature. Entities, configurations, and `AppDbContext` live in `Data/`.
 
 ```text
 src/Tom.WebApi.Api/          # the API
@@ -16,7 +16,7 @@ tests/Tom.WebApi.Api.Tests/  # Testcontainers PostgreSQL and endpoint tests
 | Value | What you get |
 | --- | --- |
 | `lean` | BannedSymbols, BannedApiAnalyzers, `.editorconfig` severities, `TreatWarningsAsErrors` in Release, `ValidateScopes` / `ValidateOnBuild`, Notes endpoint tests, and CI (restore, Release build, test, `dotnet format --verify-no-changes`, gate job `ci`). No `Architecture/` folder and no NetArchTest package. |
-| `full` | Everything in `lean`, plus `tests/<App>.Api.Tests/Architecture/` and NetArchTest. |
+| `full` | Everything in `lean`, plus `tests/<App>.Api.Tests/Architecture/`, NetArchTest, and Roslyn source scans (layer direction, feature cycles, `Reports/` isolation, `Data/` file names, namespaces, and query syntax). |
 
 ```text
 dotnet new tom-webapi -n Shop -o ./Shop
@@ -61,7 +61,7 @@ Email confirmation redirects to `http://localhost:3000/confirm-email` (`AuthEndp
 
 [`examples/same-origin`](../../examples/same-origin) is one public host. Caddy sends `/identity*`, `/account*` (passkeys), `/auth*` (external logins), `/api*`, `/health`, `/scalar*`, and `/openapi*` to this API, and every other path to Nuxt. `/api/confirm-email` stays on Nuxt: it is the confirm-email helper, not an API proxy. The browser uses a relative API base, so cookies are host-only. Do not set `SameSite=None`.
 
-`Dockerfile` is multi-stage (`sdk` then `aspnet`). The image listens on `8080` (`ASPNETCORE_URLS=http://+:8080`). TLS ends at Caddy. The entrypoint chowns the `keys/` and `emails/` mounts, then drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that file. `src/Tom.WebApi.Api/Migrations` contains `Initial`. Development `dotnet run` applies it on `:5080`. The example compose `migrate` stage runs `dotnet ef database update` before the API starts. Add a new migration when the model changes: `dotnet ef migrations add {Name} --project src/Tom.WebApi.Api --output-dir Migrations`. The API does not apply migrations itself in Production.
+`Dockerfile` is multi-stage (`sdk` then `aspnet`). The image listens on `8080` (`ASPNETCORE_URLS=http://+:8080`). TLS ends at Caddy. The entrypoint chowns the `keys/` and `emails/` mounts, then drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that file. `src/Tom.WebApi.Api/Data/Migrations` contains `Initial`. Development `dotnet run` applies it on `:5080`. The example compose `migrate` stage runs `dotnet ef database update` before the API starts. Add a new migration when the model changes: `dotnet ef migrations add {Name} --project src/Tom.WebApi.Api --output-dir Data/Migrations`. The API does not apply migrations itself in Production.
 
 Production environment (real variables, not `.env`):
 

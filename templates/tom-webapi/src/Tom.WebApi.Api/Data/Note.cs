@@ -1,8 +1,24 @@
-using Tom.WebApi.Api.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Tom.WebApi.Api.Notes;
+namespace Tom.WebApi.Api.Data;
+
+internal sealed class Note
+{
+    public long Id { get; set; }
+
+    public required string Title { get; set; }
+
+    public string? Body { get; set; }
+
+    public Guid OwnerUserId { get; set; }
+
+    public AppUser Owner { get; set; } = null!;
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset? ArchivedAt { get; set; }
+}
 
 internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
 {
@@ -17,9 +33,14 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
             .ValueGeneratedOnAddOrUpdate()
             .IsConcurrencyToken();
         builder.HasIndex(note => new { note.OwnerUserId, note.CreatedAt });
-        builder.HasOne<AppUser>()
-            .WithMany()
+        builder.HasOne(note => note.Owner)
+            .WithMany(user => user.Notes)
             .HasForeignKey(note => note.OwnerUserId)
             .OnDelete(DeleteBehavior.Restrict);
     }
+}
+
+internal static class NoteSet
+{
+    public static DbSet<Note> Notes(this AppDbContext db) => db.Set<Note>();
 }

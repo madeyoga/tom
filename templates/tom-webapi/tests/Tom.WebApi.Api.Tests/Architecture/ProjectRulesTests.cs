@@ -22,7 +22,7 @@ public sealed class ProjectRulesTests
         var apiDir = Arch.ApiProjectDirectory;
         var allowed = new HashSet<string>(StringComparer.Ordinal)
         {
-            "Infrastructure", "Shared", "Migrations", "Properties", "bin", "obj", "keys", "emails",
+            "Infrastructure", "Shared", "Data", "Properties", "bin", "obj", "keys", "emails",
         };
         foreach (var dir in Directory.GetDirectories(apiDir))
         {
@@ -34,12 +34,17 @@ public sealed class ProjectRulesTests
 
             Assert.True(
                 File.Exists(Path.Combine(dir, $"{name}Module.cs")),
-                $"Top-level folder '{name}' is not a module and is not part of the layout.");
+                $"Top-level folder '{name}' is not a feature and is not part of the layout.");
         }
+
+        Assert.False(
+            Directory.Exists(Path.Combine(apiDir, "Migrations")),
+            "Migrations belongs in Data/Migrations.");
 
         var forbidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Controllers", "DTOs", "Dtos", "Interfaces", "Repositories", "Helpers",
+            "Models", "Entities", "Contracts",
         };
         foreach (var dir in Directory.EnumerateDirectories(apiDir, "*", SearchOption.AllDirectories))
         {
@@ -52,7 +57,7 @@ public sealed class ProjectRulesTests
             var name = Path.GetFileName(dir);
 
             Assert.False(forbidden.Contains(name), $"Forbidden folder '{dir}'.");
-            if (name is "Models" or "Apis" or "Services")
+            if (name is "Apis" or "Services")
             {
                 var parent = Directory.GetParent(dir)!;
                 Assert.Equal(apiDir, parent.Parent!.FullName);

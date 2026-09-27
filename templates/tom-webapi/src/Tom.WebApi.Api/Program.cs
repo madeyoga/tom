@@ -1,5 +1,6 @@
 using AuthEndpoints;
 using Scalar.AspNetCore;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Identity;
 using Tom.WebApi.Api.Infrastructure;
 using Tom.WebApi.Api.Notes;

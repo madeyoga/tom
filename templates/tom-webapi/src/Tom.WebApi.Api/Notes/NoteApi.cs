@@ -1,8 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using AuthEndpoints.Identity;
-using Tom.WebApi.Api.Infrastructure.Data;
-using Tom.WebApi.Api.Notes.Contracts;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 using Microsoft.EntityFrameworkCore;
 
@@ -109,7 +108,7 @@ public static class NoteApi
 
     private static async Task<Results<NoContent, ProblemHttpResult>> ArchiveNote(
         long id,
-        NotesCommands notes,
+        NoteService notes,
         CurrentUser user,
         CancellationToken cancellationToken)
     {

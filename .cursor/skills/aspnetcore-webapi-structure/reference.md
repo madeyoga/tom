@@ -1,6 +1,6 @@
-# Reference: example `Notes` module
+# Reference: example `Notes` feature
 
-A small module that shows every SKILL.md rule once. Copy the shape, not the names. Snippets are trimmed. `{App}` is the project name.
+A small feature that shows every SKILL.md rule once. Copy the shape, not the names. Snippets are trimmed. `{App}` is the project name.
 
 ## File map
 
@@ -10,7 +10,7 @@ src/{App}.Api/
 ├── BannedSymbols.txt
 ├── Infrastructure/
 │   ├── InfrastructureSetup.cs        # AddInfrastructure
-│   ├── Data/AppDbContext.cs
+│   ├── DbTransactions.cs             # InTransactionAsync helper
 │   ├── Auth/PermissionPolicies.cs
 │   └── Seeding/DatabaseInitializer.cs
 ├── Shared/
@@ -19,21 +19,24 @@ src/{App}.Api/
 │   ├── Pagination.cs                 # PaginatedItems<T>, PaginationRequest
 │   ├── Problems.cs                   # TypedResults.Problem helpers
 │   └── Result.cs                     # Result<T> / Result for services
+├── Data/
+│   ├── AppDbContext.cs
+│   ├── AppUser.cs, AppRole.cs        # Identity entities
+│   ├── Note.cs                       # entity + NoteConfiguration + db.Notes()
+│   └── Migrations/
 ├── Identity/
 │   ├── IdentityModule.cs
-│   ├── AppUser.cs, AppRole.cs        # public: AppDbContext inherits them
+│   ├── AppRoles.cs
 │   ├── RoleSeeder.cs
-│   ├── UsersApi.cs
-│   └── Contracts/AppRoles.cs, Contracts/UserDirectory.cs
+│   └── UsersApi.cs
 ├── Notes/
 │   ├── NotesModule.cs
 │   ├── NotesPermissions.cs
-│   ├── NotesDb.cs                    # db.Notes()
-│   ├── Note.cs
-│   ├── NoteConfiguration.cs
 │   ├── NoteApi.cs                    # endpoints + request/response records
-│   └── Contracts/NotesQueries.cs, Contracts/NotesCommands.cs, Contracts/NoteSummary.cs
-└── Migrations/
+│   └── NoteService.cs                # writes other features need
+└── Reports/
+    ├── ReportsModule.cs
+    └── ActivityReportApi.cs          # read-only, across features
 tests/{App}.Api.Tests/
 ├── ApiFactory.cs                     # WebApplicationFactory + Testcontainers
 ├── Notes/NoteApiTests.cs
@@ -42,15 +45,18 @@ tests/{App}.Api.Tests/
 
 ## Entity and configuration
 
+`Data/Note.cs`: the entity, its configuration, and its set accessor in one file named after the entity (DATA-02, DATA-03).
+
 ```csharp
-namespace {App}.Api.Notes;
+namespace {App}.Api.Data;
 
 internal sealed class Note
 {
     public long Id { get; set; }
     public required string Title { get; set; }
     public string? Body { get; set; }
-    public Guid OwnerUserId { get; set; }           // Identity row, ID only (MOD-04)
+    public Guid OwnerUserId { get; set; }
+    public AppUser Owner { get; set; } = null!;     // navigation (DATA-15)
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ArchivedAt { get; set; }
 }
@@ -59,17 +65,17 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
 {
     public void Configure(EntityTypeBuilder<Note> builder)
     {
-        builder.ToTable("notes");                   // or ("notes", NotesModule.Schema)
+        builder.ToTable("notes");
         builder.Property(x => x.Id).UseIdentityAlwaysColumn();
         builder.Property(x => x.Title).HasMaxLength(200);
         builder.Property(x => x.Body).HasMaxLength(4000);
         builder.HasIndex(x => new { x.OwnerUserId, x.CreatedAt });
-        builder.HasOne<AppUser>().WithMany().HasForeignKey(x => x.OwnerUserId)
-            .OnDelete(DeleteBehavior.Restrict);     // FK without navigation
+        builder.HasOne(x => x.Owner).WithMany(u => u.Notes).HasForeignKey(x => x.OwnerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
-internal static class NotesDb
+internal static class NoteSet
 {
     public static DbSet<Note> Notes(this AppDbContext db) => db.Set<Note>();
 }
@@ -88,10 +94,12 @@ internal sealed class ShareLink
 ## Identity
 
 ```csharp
+// Data/AppUser.cs, Data/AppRole.cs, Data/AppDbContext.cs (namespace {App}.Api.Data)
 public sealed class AppUser : IdentityUser<Guid>
 {
     public AppUser() => Id = Guid.CreateVersion7();
     public string? DisplayName { get; set; }
+    internal ICollection<Note> Notes { get; } = [];
 }
 
 public sealed class AppRole : IdentityRole<Guid>
@@ -148,6 +156,28 @@ public static class InfrastructureSetup
         services.AddHostedService<DatabaseInitializer>();
         return services;
     }
+}
+
+// MOD-10: one transaction per command. A nested call joins the caller's transaction.
+public static class DbTransactions
+{
+    public static Task<Result> InTransactionAsync(
+        this AppDbContext db, Func<CancellationToken, Task<Result>> work, CancellationToken ct)
+        => db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            if (db.Database.CurrentTransaction is not null) return await work(ct);
+
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var result = await work(ct);
+            if (result.Problem is not null)
+            {
+                await tx.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+                return result;
+            }
+            await tx.CommitAsync(ct);
+            return result;
+        });
 }
 
 public static class PermissionPolicies
@@ -213,17 +243,14 @@ Endpoint side of ERR-04: `if (result.Problem is { } problem) return problem;` th
 
 `DatabaseInitializer` is a plain `IHostedService` (not `BackgroundService`, so startup waits for it). In `StartAsync` it creates a scope, runs `MigrateAsync()` when `Database:MigrateOnStartup` is true (Development and tests only, DATA-10), then runs every `IDataSeeder` by `Order`. It rethrows when a critical seeder fails and logs otherwise.
 
-## Module registration
+## Feature registration
 
 ```csharp
 public static class NotesModule
 {
-    public const string Schema = "notes";
-
     public static IServiceCollection AddNotesModule(this IServiceCollection services, IConfiguration config)
     {
-        services.AddScoped<NotesQueries>();
-        services.AddScoped<NotesCommands>();
+        services.AddScoped<NoteService>();
         services.AddAuthorizationBuilder()
             .AddPermission(NotesPermissions.View, AppRoles.Member, AppRoles.Admin)
             .AddPermission(NotesPermissions.Manage, AppRoles.Member, AppRoles.Admin);
@@ -306,9 +333,9 @@ public static class NoteApi
         return TypedResults.CreatedAtRoute(body, "GetNote", new { id = note.Id }); // 201 + Location: /api/notes/{id}
     }
 
-    // Logic lives in a Contracts command because another module also archives notes (ERR-04).
+    // Logic lives in NoteService because another feature also archives notes (MOD-05, ERR-04).
     private static async Task<Results<NoContent, ProblemHttpResult>> ArchiveNote(
-        long id, NotesCommands notes, CurrentUser user, CancellationToken ct)
+        long id, NoteService notes, CurrentUser user, CancellationToken ct)
     {
         var result = await notes.ArchiveAsync(id, user.RequiredUserId, ct);
         if (result.Problem is { } problem) return problem;
@@ -327,20 +354,14 @@ public sealed record NoteListItem(long Id, string Title, DateTimeOffset CreatedA
 
 `[property: ...]` on positional records is picked up by `AddValidation()` in .NET 10 (checked: an empty `Title` returns 400 `application/problem+json`). `RequireAntiforgery()` on a route handler comes from AuthEndpoints: add `using AuthEndpoints.Identity;`.
 
-## Contracts
+## Write service
+
+`Notes/NoteService.cs`. Notes owns the state of `Note` (MOD-05). Another feature that archives notes calls this service inside its own transaction (MOD-10); the service saves but never opens a transaction.
 
 ```csharp
-namespace {App}.Api.Notes.Contracts;
+namespace {App}.Api.Notes;
 
-public sealed record NoteSummary(long Id, string Title);
-
-public sealed class NotesQueries(AppDbContext db)
-{
-    public Task<int> CountForUserAsync(Guid userId, CancellationToken ct)
-        => db.Notes().CountAsync(n => n.OwnerUserId == userId && n.ArchivedAt == null, ct);
-}
-
-public sealed class NotesCommands(AppDbContext db, TimeProvider clock)
+public sealed class NoteService(AppDbContext db, TimeProvider clock)
 {
     public async Task<Result> ArchiveAsync(long noteId, Guid userId, CancellationToken ct)
     {
@@ -353,6 +374,26 @@ public sealed class NotesCommands(AppDbContext db, TimeProvider clock)
         return Result.Success;
     }
 }
+```
+
+## Cross-feature read
+
+`Reports/ActivityReportApi.cs` reads notes and users through navigations, with method syntax (MOD-04, MOD-09). It calls no feature service and nothing depends on it.
+
+```csharp
+private static async Task<Ok<List<ActivityRow>>> GetActivity(AppDbContext db, CancellationToken ct)
+{
+    var rows = await db.Users.AsNoTracking()
+        .Select(u => new ActivityRow(
+            u.Id,
+            u.DisplayName,
+            u.Notes.Count(n => n.ArchivedAt == null),
+            u.Notes.Max(n => (DateTimeOffset?)n.CreatedAt)))
+        .ToListAsync(ct);
+    return TypedResults.Ok(rows);
+}
+
+public sealed record ActivityRow(Guid UserId, string? DisplayName, int OpenNotes, DateTimeOffset? LastNoteAt);
 ```
 
 ## Reusable code
@@ -393,12 +434,12 @@ internal sealed class S3FileStorage(IAmazonS3 s3, IOptions<StorageOptions> optio
 Typed HTTP client (DI-05):
 
 ```csharp
-internal sealed class ExchangeRateClient(HttpClient http)
+internal sealed class ExternalServiceClient(HttpClient http)
 {
-    public Task<RateResponse?> GetAsync(string code, CancellationToken ct)
-        => http.GetFromJsonAsync<RateResponse>($"rates/{code}", ct);
+    public Task<ExternalItem?> GetAsync(string key, CancellationToken ct)
+        => http.GetFromJsonAsync<ExternalItem>($"items/{key}", ct);
 }
-// services.AddHttpClient<ExchangeRateClient>(c => c.BaseAddress = new Uri(config["Rates:BaseUrl"]!));
+// services.AddHttpClient<ExternalServiceClient>(c => c.BaseAddress = new Uri(config["ExternalService:BaseUrl"]!));
 ```
 
 Background work creates a scope per unit of work (DI-04):
@@ -553,10 +594,10 @@ Production mode in tests needs what Production needs: a registered `IEmailSender
 
 ## Optional pattern: multi-tenancy
 
-Not part of the default skill. Add only when the product needs tenants.
+Not part of the default skill. Add only when the application needs tenants.
 
-- A `Tenancy/` module owns `Tenant` and `Tenancy/Contracts/CurrentTenant` (`Guid TenantId` read from a `tenant_id` claim). Add the claim at sign-in with a custom `IUserClaimsPrincipalFactory<AppUser>` so requests do not hit the database.
-- Tenant-owned entities implement `Shared/ITenantOwned { Guid TenantId { get; set; } }`. The tenant ID is a scalar, not a navigation.
+- A `Tenancy/` feature owns the state of `Data/Tenant.cs` and provides `Tenancy/CurrentTenant` (`Guid TenantId` read from a `tenant_id` claim). Add the claim at sign-in with a custom `IUserClaimsPrincipalFactory<AppUser>` so requests do not hit the database.
+- Tenant-owned entities implement `Shared/ITenantOwned { Guid TenantId { get; set; } }`. The filter uses the scalar `TenantId`; a navigation to `Tenant` is optional.
 - `AppDbContext` takes `CurrentTenant` in its constructor and, after `ApplyConfigurationsFromAssembly`, applies a named filter to every `ITenantOwned` type: `builder.Entity<T>().HasQueryFilter("Tenant", e => e.TenantId == TenantId)` where `TenantId` is a context property. This is the one allowed addition to `OnModelCreating` (DATA-01).
 - A `SaveChangesInterceptor` sets `TenantId` on added `ITenantOwned` rows and rejects changes to it on modified rows.
 - Cross-tenant reads use `IgnoreQueryFilters(["Tenant"])` only in endpoints guarded by a platform-admin permission. Flag every use in review, or ban the parameterless `IgnoreQueryFilters` in `BannedSymbols.txt`.

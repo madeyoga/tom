@@ -1,17 +1,15 @@
-using Tom.WebApi.Api.Identity.Contracts;
-using Tom.WebApi.Api.Infrastructure.Auth;
-using Tom.WebApi.Api.Notes.Contracts;
+using Tom.WebApi.Api.Identity;
+using Tom.WebApi.Api.Infrastructure;
 
 namespace Tom.WebApi.Api.Notes;
 
-// Example feature module. Delete this folder and the AddNotesModule / MapNotesModule calls in Program.cs to remove it.
+// Example feature. Delete this folder and the AddNotesModule / MapNotesModule calls in Program.cs to remove it.
 public static class NotesModule
 {
     public static IServiceCollection AddNotesModule(this IServiceCollection services, IConfiguration configuration)
     {
         _ = configuration;
-        services.AddScoped<NotesQueries>();
-        services.AddScoped<NotesCommands>();
+        services.AddScoped<NoteService>();
         services.AddAuthorizationBuilder()
             .AddPermission(NotesPermissions.View, AppRoles.Admin)
             .AddPermission(NotesPermissions.Manage, AppRoles.Admin);

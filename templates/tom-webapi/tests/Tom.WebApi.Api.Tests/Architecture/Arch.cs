@@ -7,14 +7,14 @@ internal static class Arch
 {
     public static readonly Assembly Api = typeof(Program).Assembly;
     public const string Root = "Tom.WebApi.Api";
-    private static readonly string[] NonModules = ["Infrastructure", "Shared", "Migrations"];
+    public static readonly string[] Layers = ["Infrastructure", "Shared", "Data"];
 
     public static IReadOnlyList<Type> Types { get; } = Api.GetTypes()
         .Where(type => type.Namespace?.StartsWith(Root, StringComparison.Ordinal) == true)
         .Where(type => !type.IsDefined(typeof(CompilerGeneratedAttribute), false))
         .ToArray();
 
-    public static string? ModuleOf(Type type)
+    public static string? FeatureOf(Type type)
     {
         if (type.Namespace?.StartsWith(Root + ".", StringComparison.Ordinal) != true)
         {
@@ -23,23 +23,15 @@ internal static class Arch
 
         var parts = type.Namespace.Split('.');
         var depth = Root.Split('.').Length;
-        return parts.Length > depth && !NonModules.Contains(parts[depth]) ? parts[depth] : null;
+        return parts.Length > depth && !Layers.Contains(parts[depth]) ? parts[depth] : null;
     }
 
-    public static IReadOnlyList<string> Modules { get; } =
-        Types.Select(ModuleOf).OfType<string>().Distinct().Order().ToArray();
-
-    public static bool InNamespace(Type type, string ns)
-        => type.Namespace is { } name && (name == ns || name.StartsWith(ns + ".", StringComparison.Ordinal));
-
-    public static bool InModule(Type type, string module) => InNamespace(type, $"{Root}.{module}");
-
-    public static bool IsContracts(Type type)
-        => ModuleOf(type) is { } module && InNamespace(type, $"{Root}.{module}.Contracts");
+    public static IReadOnlyList<string> Features { get; } =
+        Types.Select(FeatureOf).OfType<string>().Distinct().Order().ToArray();
 
     public static string RepoRoot { get; } = FindRepoRoot();
 
-    public static string ApiProjectDirectory { get; } = Path.Combine(RepoRoot, "src", $"{Root}");
+    public static string ApiProjectDirectory { get; } = Path.Combine(RepoRoot, "src", Root);
 
     private static string FindRepoRoot()
     {

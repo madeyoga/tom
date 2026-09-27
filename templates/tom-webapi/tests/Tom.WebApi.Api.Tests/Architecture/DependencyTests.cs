@@ -6,6 +6,9 @@ namespace Tom.WebApi.Api.Tests.Architecture;
 
 public sealed class DependencyTests
 {
+    // NetArchTest does not see IServiceProvider when it only appears as a property return type
+    // (scope.ServiceProvider) or as the parameter of an extension call (GetRequiredService<T>),
+    // so the locator entry points are listed too.
     private static readonly string[] Locator =
     [
         "System.IServiceProvider",
@@ -17,58 +20,31 @@ public sealed class DependencyTests
     ];
 
     [Fact]
-    public void Modules_use_only_other_modules_contracts()
+    public void Lower_layers_do_not_depend_on_features()
     {
-        var failures = new List<string>();
-        foreach (var a in Arch.Modules)
-        {
-            foreach (var b in Arch.Modules.Where(module => module != a))
-            {
-                var forbidden = Arch.Types
-                    .Where(type => Arch.InModule(type, b) && !Arch.IsContracts(type) && !type.IsNested)
-                    .Select(type => type.FullName!)
-                    .ToArray();
-                if (forbidden.Length == 0)
-                {
-                    continue;
-                }
+        string[] features = [.. Arch.Features.Select(feature => $"{Arch.Root}.{feature}")];
+        (string Layer, string[] Forbidden)[] rules =
+        [
+            ("Data", [.. features, $"{Arch.Root}.Infrastructure"]),
+            ("Infrastructure", features),
+            ("Shared", [.. features, $"{Arch.Root}.Data", $"{Arch.Root}.Infrastructure"]),
+        ];
 
-                var result = Types.InAssembly(Arch.Api)
-                    .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.{Regex.Escape(a)}(\..+)?$")
-                    .And().DoNotHaveNameEndingWith("Configuration")
-                    .ShouldNot().HaveDependencyOnAny(forbidden)
-                    .GetResult();
+        var failures = rules
+            .SelectMany(rule => Types.InAssembly(Arch.Api)
+                .That().ResideInNamespaceMatching($@"^{Regex.Escape($"{Arch.Root}.{rule.Layer}")}(\..+)?$")
+                .ShouldNot().HaveDependencyOnAny(rule.Forbidden)
+                .GetResult().FailingTypeNames ?? [])
+            .ToArray();
 
-                if (!result.IsSuccessful)
-                {
-                    failures.AddRange(result.FailingTypeNames.Select(name => $"{name} -> {b} internals"));
-                }
-            }
-        }
-
-        Assert.Empty(failures);
-    }
-
-    [Fact]
-    public void Shared_does_not_depend_on_modules()
-    {
-        var modules = Arch.Modules.Select(module => $"{Arch.Root}.{module}").ToArray();
-        if (modules.Length == 0)
-        {
-            return;
-        }
-
-        var result = Types.InAssembly(Arch.Api)
-            .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.Shared(\..+)?$")
-            .ShouldNot().HaveDependencyOnAny(modules)
-            .GetResult();
-
-        Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+        Assert.True(failures.Length == 0, string.Join(", ", failures));
     }
 
     [Fact]
     public void Business_code_does_not_use_the_service_locator()
     {
+        // NetArchTest's ImplementInterface sees direct interfaces only (a BackgroundService subclass
+        // does not match), so the exemptions are computed with reflection.
         var exempt = Arch.Types
             .Where(type => typeof(IHostedService).IsAssignableFrom(type)
                 || type.Name.EndsWith("Module", StringComparison.Ordinal))
@@ -76,7 +52,7 @@ public sealed class DependencyTests
             .ToHashSet();
 
         var result = Types.InAssembly(Arch.Api)
-            .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.(?!(Infrastructure|Shared|Migrations)(\.|$))[^.]+(\..+)?$")
+            .That().ResideInNamespaceMatching($@"^{Regex.Escape(Arch.Root)}\.(?!(Infrastructure|Shared|Data)(\.|$))[^.]+(\..+)?$")
             .ShouldNot().HaveDependencyOnAny(Locator)
             .GetResult();
 
