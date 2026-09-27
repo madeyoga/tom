@@ -24,7 +24,7 @@ Keep `Shared/` small. Add a type there only when at least two features need it a
 
 ## Data/
 
-- One file per entity: the entity and its `IEntityTypeConfiguration<T>` in `Data/{Entity}.cs` (DATA-02). `AppDbContext` exposes the set as `DbSet<T>` (DATA-03). Small enums and value types used only by that entity may share the file. Anything used by several entities gets its own file, named after the type.
+- One file per entity: the entity and its `IEntityTypeConfiguration<T>` in `Data/{Entity}.cs`. `AppDbContext` exposes one `DbSet<T>` property per entity (`public DbSet<Note> Notes => Set<Note>();`, DATA-03). No `db.X()` extension accessors. Small enums and value types used only by that entity may share the file. Anything used by several entities gets its own file, named after the type.
 - `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>` lives in `Data/AppDbContext.cs`. `OnModelCreating` calls `base.OnModelCreating(builder)` then `builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`, which also finds `internal` configuration classes with a parameterless constructor.
 - `AppUser` and `AppRole` are entities, so they live in `Data/` too. The `Identity/` feature owns their state (MOD-05).
 - Navigations are allowed in both directions (DATA-15). Configure each relationship once, in the file of the entity that holds the foreign key:
@@ -44,7 +44,7 @@ Endpoint classes and HTTP DTOs can stay `public`. Minimal API handlers, System.T
 
 ## Reading data (MOD-04)
 
-- Any feature may read any entity. Start from the set you need and follow navigations: `db.EntitiesA().Where(a => a.Owner.IsActive).Select(a => new EntityAListItem(a.Id, a.Name, a.Owner.DisplayName))`.
+- Any feature may read any entity. Start from the set you need and follow navigations: `db.EntitiesA.Where(a => a.Owner.IsActive).Select(a => new EntityAListItem(a.Id, a.Name, a.Owner.DisplayName))`.
 - Use method syntax only (DATA-14). Prefer navigations over `.Join`; `.Join` is discouraged and flagged in review.
 - Project to DTOs in the query (DTO-04). Use `.Include` only when you load entities to change them.
 - No N+1: one query per endpoint where possible, never a query per row in a loop.
@@ -60,7 +60,7 @@ Endpoint classes and HTTP DTOs can stay `public`. Minimal API handlers, System.T
   {
       var changed = await featureBService.ApplyAsync(request.EntityBId, request.Amount, ct);
       if (changed.Problem is { } problem) return problem;                // helper rolls back
-      db.EntitiesA().Add(new EntityA { EntityBId = request.EntityBId, CreatedAt = clock.GetUtcNow() });
+      db.EntitiesA.Add(new EntityA { EntityBId = request.EntityBId, CreatedAt = clock.GetUtcNow() });
       await db.SaveChangesAsync(ct);
       return Result.Success;
   }, ct);

@@ -45,12 +45,12 @@ tests/{App}.Api.Tests/
 
 ## Entity and configuration
 
-`Data/Note.cs`: the entity and its configuration in one file named after the entity (DATA-02). The set is `db.Notes` on `AppDbContext` (DATA-03).
+`Data/Note.cs`: the entity and its configuration in one file named after the entity (DATA-02). `AppDbContext` exposes `public DbSet<Note> Notes => Set<Note>();` (DATA-03).
 
 ```csharp
 namespace {App}.Api.Data;
 
-public sealed class Note
+internal sealed class Note
 {
     public long Id { get; set; }
     public required string Title { get; set; }
