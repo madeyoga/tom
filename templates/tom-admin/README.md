@@ -34,6 +34,8 @@ Nuxt listens on `http://localhost:3000`. Set `NUXT_PUBLIC_API_BASE` (default `ht
    dotnet run --project src/Shop.Api
    ```
 
+   Uninstall: `dotnet new uninstall AuthEndpoints.Templates.TomWebApi`.
+
 2. Run this admin on `:3000` with `NUXT_PUBLIC_API_BASE=http://localhost:5080`. Leave `NUXT_API_INTERNAL` unset.
 3. Development CORS on the API allows `Frontend:Origin` (`http://localhost:3000`) with credentials. Production leaves CORS off.
 4. Auth calls go to `/identity/*` (CSRF header `RequestVerificationToken`) with `credentials: 'include'`. Passkeys use `/account/passkeys/*`. External logins use `/auth/*`.

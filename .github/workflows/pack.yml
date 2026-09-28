@@ -1,0 +1,31 @@
+name: pack
+
+on:
+  pull_request:
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Pack
+        run: dotnet pack templates/AuthEndpoints.Templates.csproj -c Release -o out
+
+      - name: Install template
+        run: dotnet new install ./out/AuthEndpoints.Templates.*.nupkg
+
+      - name: Create smoke apps
+        run: |
+          dotnet new tom-webapi -n Smoke
+          dotnet new tom-webapi -n SmokeFull --guards full
+
+      - name: Build smoke apps
+        run: |
+          dotnet build Smoke
+          dotnet build SmokeFull

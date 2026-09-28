@@ -6,7 +6,7 @@ alwaysApply: false
 
 Follow the patterns of existing features first. Never copy anything listed under "Existing code that does not match yet". Open the `aspnetcore-webapi-structure` skill only when there is no existing example to follow, or when the code and the skill disagree. The skill wins.
 
-Before requesting review, run pstack's `/no-comments` on the diff and fix the accepted findings, if pstack is installed.
+Before requesting review, remove comments added during the change; keep only comments that explain a non-obvious why.
 
 ## Project decisions
 
