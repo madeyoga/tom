@@ -28,6 +28,8 @@ This repository keeps the full checks, so `dotnet test` here runs the architectu
 ## Run
 
 1. Postgres on `localhost:5432` with database `tom_webapi` (user/password `postgres`), or change `ConnectionStrings:DefaultConnection` in `src/Tom.WebApi.Api/appsettings.json`.
+
+   The password `postgres` is the local Development default. In production, set `ConnectionStrings__DefaultConnection` to a real secret and do not deploy that password.
 2. From this directory, copy `.env.example` to `.env` and set `Seed__Password` (`.env` is gitignored). Development loads `.env` from the current directory only.
 3. `dotnet tool restore`
 4. `dotnet run --project src/Tom.WebApi.Api` (Development applies migrations, then seeds `Seed__AdminEmail` if `Seed__Password` is set)

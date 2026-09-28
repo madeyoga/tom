@@ -1,8 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "madeyoga",
-  "classifications": ["Web", "WebAPI"],
-  "identity": "Tom.WebApi",
+  "classifications": ["Web", "WebAPI", "API"],
+  "identity": "AuthEndpoints.Templates.TomWebApi",
+  "groupIdentity": "AuthEndpoints.Templates.TomWebApi",
   "name": "Tom ASP.NET Core Web API",
   "description": "Opinionated ASP.NET Core 10 Web API: Npgsql, Identity with Guid keys, AuthEndpoints cookie facade, OpenAPI and Scalar.",
   "shortName": "tom-webapi",

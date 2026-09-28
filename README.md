@@ -8,7 +8,17 @@ Local development is two origins: the API on `http://localhost:5080`, the admin 
 
 ## Install the API template
 
-From this repository:
+From NuGet:
+
+```text
+dotnet new install AuthEndpoints.Templates
+dotnet new tom-webapi -n MyApp
+dotnet new tom-webapi -n MyApp --guards full
+```
+
+Uninstall: `dotnet new uninstall AuthEndpoints.Templates`.
+
+From a clone of this repository:
 
 ```text
 dotnet new install ./templates/tom-webapi
@@ -23,7 +33,7 @@ dotnet new tom-webapi -n Shop -o ./Shop --guards full
 
 `--guards` is `lean` (default) or `full`. Lean stamps BannedSymbols, analyzer severities, Release warnings-as-errors, endpoint tests, and CI, and omits architecture tests. `full` adds `tests/<Name>.Api.Tests/Architecture/`, NetArchTest, and Roslyn source scans. Details are in `templates/tom-webapi/README.md`.
 
-Uninstall: `dotnet new uninstall Tom.WebApi`.
+Uninstall: `dotnet new uninstall AuthEndpoints.Templates.TomWebApi`.
 
 The stamped API is a solution: `src/<Name>.Api` and `tests/<Name>.Api.Tests`. It listens on `http://localhost:5080`. See the stamped project README for Postgres, Scalar, and cookie login (`LoginCookie`, not `useCookies`).
 
