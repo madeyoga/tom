@@ -23,7 +23,7 @@ def main() -> None:
     parser.add_argument("--base", default=os.environ.get("ASPIRE_DASHBOARD_URL") or "http://localhost:18888")
     parser.add_argument("--route", default="")
     parser.add_argument("--trace-id", default="")
-    parser.add_argument("--limit", type=int, default=30)
+    parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--wait", type=float, default=0, help="Retry until a row appears, or this many seconds pass")
     args = parser.parse_args()
     base = args.base.rstrip("/")
