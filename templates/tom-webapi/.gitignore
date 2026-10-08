@@ -6,3 +6,4 @@ emails/
 *.user
 appsettings.*.local.json
 TestResults/
+.cursor/skills/trace-evidence/evidence/
