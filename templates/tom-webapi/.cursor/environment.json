@@ -1,0 +1,6 @@
+{
+  "name": "Tom.WebApi",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start-aspire-dashboard.sh"
+}

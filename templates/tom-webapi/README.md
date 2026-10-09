@@ -49,6 +49,12 @@ The HTTP profile listens on `http://localhost:5080`.
 
 `dotnet test` starts PostgreSQL with Testcontainers. In this repository that includes the architecture checks. A lean stamp runs the Notes and OpenAPI endpoint tests only. `dotnet format --verify-no-changes` is the formatting gate. `.github/workflows/ci.yml` restores, builds Release, tests, and formats, then a final job named `ci`.
 
+## Traces
+
+Export is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, so CI does not send telemetry. When it is set, the API (and the test host, which is the same program) exports ASP.NET Core, HttpClient, and EF Core spans. The service name is `OTEL_SERVICE_NAME` or `Tom.WebApi`. SQL text is the `db.statement` attribute. Parameter values are not recorded.
+
+`.cursor/install.sh` installs the standalone Aspire dashboard 13.6.0. `.cursor/start-aspire-dashboard.sh` listens on `http://localhost:18888` (OTLP gRPC on `http://localhost:4317`). `.cursor/skills/trace-evidence/SKILL.md` prints a Markdown trace table for a pull request.
+
 ## Pair with tom-admin
 
 Development is a **separate-origin** cookie SPA:

@@ -1,4 +1,6 @@
 using AuthEndpoints;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Scalar.AspNetCore;
 using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Identity;
@@ -24,6 +26,9 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddIdentityModule(builder.Configuration);
 builder.Services.AddNotesModule(builder.Configuration);
+
+// Export stays off unless OTEL_EXPORTER_OTLP_ENDPOINT is set, so CI and production are unchanged.
+ConfigureOpenTelemetry(builder);
 
 var app = builder.Build();
 
@@ -57,5 +62,31 @@ api.MapNotesModule();
 
 app.MapHealthChecks("/health");
 app.Run();
+
+static void ConfigureOpenTelemetry(WebApplicationBuilder builder)
+{
+    var endpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+    if (string.IsNullOrWhiteSpace(endpoint))
+    {
+        return;
+    }
+
+    var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME");
+    if (string.IsNullOrWhiteSpace(serviceName))
+    {
+        serviceName = "Tom.WebApi";
+    }
+
+    // db.statement is the SQL text. Do not record parameter values.
+    Environment.SetEnvironmentVariable("OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS", "false");
+
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService(serviceName))
+        .WithTracing(tracing => tracing
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddEntityFrameworkCoreInstrumentation()
+            .AddOtlpExporter());
+}
 
 public partial class Program;

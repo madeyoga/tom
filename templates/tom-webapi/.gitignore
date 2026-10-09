@@ -6,3 +6,6 @@ emails/
 *.user
 appsettings.*.local.json
 TestResults/
+__pycache__/
+*.pyc
+.cursor/skills/trace-evidence/evidence/
