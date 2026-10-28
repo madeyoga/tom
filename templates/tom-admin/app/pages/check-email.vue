@@ -247,7 +247,7 @@ onUnmounted(() => {
             <UInput
               v-model="pastedUrl"
               class="w-full"
-              placeholder="http://localhost:5080/identity/confirmEmail?..."
+              placeholder="http://localhost:5080/auth/confirmEmail?..."
             />
           </UFormField>
           <div class="flex flex-wrap gap-2">

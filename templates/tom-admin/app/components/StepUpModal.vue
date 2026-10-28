@@ -83,7 +83,7 @@ async function loadMethods() {
   loadingMethods.value = true
   methodsError.value = ''
   try {
-    const raw = await api<AuthMethodsResponse>('/identity/manage/authMethods')
+    const raw = await api<AuthMethodsResponse>('/auth/manage/authMethods')
     availableMethods.value = visibleStepUpMethods(normalizeAuthMethods(raw))
     if (availableMethods.value.length === 0) {
       methodsError.value = 'No confirmation methods are available for this account.'
@@ -100,7 +100,7 @@ async function loadMethods() {
 }
 
 async function postConfirm(body: ConfirmIdentityBody) {
-  const response = await api<ConfirmIdentityResponse>('/identity/confirmIdentity', {
+  const response = await api<ConfirmIdentityResponse>('/auth/confirmIdentity', {
     method: 'POST',
     body
   })
@@ -180,7 +180,7 @@ async function submitPasskey() {
 
   submitting.value = true
   try {
-    const optionsJson = await api<string | object>('/identity/confirmIdentity/passkeyOptions', {
+    const optionsJson = await api<string | object>('/auth/confirmIdentity/passkeyOptions', {
       method: 'POST',
       body: {}
     })

@@ -5,7 +5,7 @@
     <PackageId>AuthEndpoints.Templates</PackageId>
     <Version>1.0.0</Version>
     <Authors>madeyoga</Authors>
-    <Description>ASP.NET Core Web API template with AuthEndpoints cookie auth, EF Core + PostgreSQL, minimal APIs, OpenAPI + Scalar</Description>
+    <Description>ASP.NET Core Web API template with AuthEndpoints 4 cookie auth, EF Core + PostgreSQL, minimal APIs, OpenAPI + Scalar</Description>
     <PackageTags>dotnet-new;templates;authendpoints;aspnetcore;webapi</PackageTags>
     <PackageProjectUrl>https://github.com/madeyoga/tom</PackageProjectUrl>
     <RepositoryUrl>https://github.com/madeyoga/tom</RepositoryUrl>

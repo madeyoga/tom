@@ -26,7 +26,7 @@ async function onSubmit() {
 
   busy.value = true
   try {
-    await api('/identity/forgotPassword', {
+    await api('/auth/forgotPassword', {
       method: 'POST',
       body: { email: value },
       skipCsrf: true

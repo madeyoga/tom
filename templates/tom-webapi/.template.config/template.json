@@ -5,7 +5,7 @@
   "identity": "AuthEndpoints.Templates.TomWebApi",
   "groupIdentity": "AuthEndpoints.Templates.TomWebApi",
   "name": "Tom ASP.NET Core Web API",
-  "description": "Opinionated ASP.NET Core 10 Web API: Npgsql, Identity with Guid keys, AuthEndpoints cookie facade, OpenAPI and Scalar.",
+  "description": "Opinionated ASP.NET Core 10 Web API: Npgsql, Identity with Guid keys, AuthEndpoints 4 cookie password facade, OpenAPI and Scalar.",
   "shortName": "tom-webapi",
   "sourceName": "Tom.WebApi",
   "preferNameDirectory": true,

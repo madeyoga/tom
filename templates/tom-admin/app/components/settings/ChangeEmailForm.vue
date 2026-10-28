@@ -33,7 +33,7 @@ async function onSubmit() {
   try {
     const body: InfoUpdateRequest = { newEmail: next }
     const done = await stepUp.run(async ({ reauthToken }) => {
-      await api<ManageInfo>('/identity/manage/info', {
+      await api<ManageInfo>('/auth/manage/info', {
         method: 'POST',
         body,
         ...reauthRequest(reauthToken)

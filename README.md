@@ -35,7 +35,7 @@ dotnet new tom-webapi -n Shop -o ./Shop --guards full
 
 Uninstall: `dotnet new uninstall AuthEndpoints.Templates.TomWebApi`.
 
-The stamped API is a solution: `src/<Name>.Api` and `tests/<Name>.Api.Tests`. It listens on `http://localhost:5080`. See the stamped project README for Postgres, Scalar, and cookie login (`LoginCookie`, not `useCookies`).
+The stamped API is a solution: `src/<Name>.Api` and `tests/<Name>.Api.Tests`. It listens on `http://localhost:5080`. See the stamped project README for Postgres, Scalar, and cookie login (`POST /auth/login`; `useCookies` does nothing).
 
 `templates/tom-webapi/Dockerfile` is a multi-stage SDK build of `src/Tom.WebApi.Api`. The runtime image listens on `8080` and drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that Dockerfile.
 

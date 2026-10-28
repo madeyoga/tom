@@ -139,10 +139,15 @@ public static class InfrastructureSetup
             sp.GetRequiredService<IConfiguration>().GetConnectionString("Default")
             ?? throw new InvalidOperationException("ConnectionStrings:Default is not set.")));
 
-        services.AddAuthEndpoints<AppUser, AppRole, AppDbContext>(o =>
+        var identity = services.AddPasswordAuth<AppUser, AppDbContext>(o =>
         {
-            o.Passkeys.Enabled = false; // or ServerDomain + AddPasskeyUserIdFactory (AUTH-03)
+            o.Session = AuthEndpointsSession.Cookie;
+            o.Path = "/auth";
+            // Omit Passkeys.ServerDomain to leave passkeys off, or set it and call AddPasskeyUserIdFactory (AUTH-03).
         });
+        services.RemoveAll<IUserClaimsPrincipalFactory<AppUser>>();
+        services.RemoveAll<IUserStore<AppUser>>();
+        identity.AddRoles<AppRole>().AddEntityFrameworkStores<AppDbContext>();
         services.AddTransient<IEmailSender<AppUser>, SmtpEmailSender>();
         services.ConfigureApplicationCookie(o =>
         {
@@ -515,8 +520,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public async Task<HttpClient> SignInAsync(string email, string password)
     {
         var client = CreateClient(new() { HandleCookies = true, AllowAutoRedirect = false });
-        (await client.PostAsJsonAsync("/identity/login", new { email, password })).EnsureSuccessStatusCode();
-        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/identity/csrfToken");
+        (await client.PostAsJsonAsync("/auth/login", new { email, password })).EnsureSuccessStatusCode();
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/auth/csrfToken");
         client.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.CsrfToken);
         return client;
     }

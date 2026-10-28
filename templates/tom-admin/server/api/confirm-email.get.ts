@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Set NUXT_API_INTERNAL or an absolute NUXT_PUBLIC_API_BASE for confirm-email'
     })
   }
-  const url = new URL('/identity/confirmEmail', `${base}/`)
+  const url = new URL('/auth/confirmEmail', `${base}/`)
   url.searchParams.set('userId', userId)
   url.searchParams.set('code', code)
   if (changedEmail) {

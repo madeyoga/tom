@@ -2,7 +2,7 @@
 
 How each SKILL.md rule can be checked by a machine, and which rules stay with review. Package versions are the latest stable on nuget.org on 2026-09-26. Pin them when adopting.
 
-Compiled and run on 2026-09-26 in a scratch solution (SDK 10.0.401, EF Core 10.0.4 via Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3, Scalar.AspNetCore 2.17.10, AuthEndpoints 3.1.0, NetArchTest.Rules 1.3.2, Testcontainers.PostgreSql 4.15.0): the build passes with warnings as errors, all tests pass, and each ban, analyzer rule, and architecture rule was shown to fail on a deliberate violation. Re-check after major package upgrades.
+Compiled and run on 2026-09-26 in a scratch solution (SDK 10.0.401, EF Core 10.0.4 via Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3, Scalar.AspNetCore 2.17.10, AuthEndpoints 3.1.0, NetArchTest.Rules 1.3.2, Testcontainers.PostgreSql 4.15.0): the build passes with warnings as errors, all tests pass, and each ban, analyzer rule, and architecture rule was shown to fail on a deliberate violation. Re-check after major package upgrades. The template now references AuthEndpoints 4.0.4.
 
 ## 1. Build settings
 

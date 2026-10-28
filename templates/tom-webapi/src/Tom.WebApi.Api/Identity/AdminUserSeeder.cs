@@ -52,7 +52,7 @@ internal sealed class AdminUserSeeder(
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
             logger.LogWarning(
-                "No Admin user exists. Set Seed__BootstrapAdminEmail and Seed__BootstrapAdminPassword, then restart the API to create the first Admin. POST /identity/register does not assign roles.");
+                "No Admin user exists. Set Seed__BootstrapAdminEmail and Seed__BootstrapAdminPassword, then restart the API to create the first Admin. POST /auth/register does not assign roles.");
             return;
         }
 

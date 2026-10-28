@@ -10,7 +10,7 @@ export function useAuthSession() {
   const refreshSession = async () => {
     loading.value = true
     try {
-      const manage = await api<ManageInfo>('/identity/manage/info')
+      const manage = await api<ManageInfo>('/auth/manage/info')
       info.value = manage
       email.value = manage.email ?? null
       return manage
@@ -25,7 +25,7 @@ export function useAuthSession() {
 
   const signOut = async () => {
     try {
-      await api('/identity/logout', {
+      await api('/auth/logout', {
         method: 'POST'
       })
     } catch {

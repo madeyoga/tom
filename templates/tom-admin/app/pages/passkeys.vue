@@ -22,7 +22,7 @@ const busy = ref(false)
 async function listPasskeys() {
   loading.value = true
   try {
-    const response = await api('/account/passkeys/')
+    const response = await api('/auth/passkeys/')
     passkeys.value = readPasskeys(response)
   } catch (error) {
     toast.add({
@@ -39,13 +39,13 @@ async function addPasskey() {
   busy.value = true
   try {
     const done = await stepUp.run(async ({ reauthToken }) => {
-      const optionsJson = await api<string | object>('/account/passkeys/creationOptions', {
+      const optionsJson = await api<string | object>('/auth/passkeys/creationOptions', {
         method: 'POST',
         body: {},
         ...reauthRequest(reauthToken)
       })
       const credentialJson = await createPasskeyCredential(optionsJson)
-      await api('/account/passkeys/', {
+      await api('/auth/passkeys/', {
         method: 'POST',
         body: { credentialJson },
         ...reauthRequest(reauthToken)
@@ -84,7 +84,7 @@ async function removePasskey(credentialId: string) {
   busy.value = true
   try {
     const done = await stepUp.run(async ({ reauthToken }) => {
-      await api(`/account/passkeys/${encodeURIComponent(credentialId)}`, {
+      await api(`/auth/passkeys/${encodeURIComponent(credentialId)}`, {
         method: 'DELETE',
         ...reauthRequest(reauthToken)
       })

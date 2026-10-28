@@ -43,7 +43,7 @@ async function onSubmit() {
 
   busy.value = true
   try {
-    await api('/identity/resetPassword', {
+    await api('/auth/resetPassword', {
       method: 'POST',
       body: {
         email: form.email,
