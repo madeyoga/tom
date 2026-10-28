@@ -38,8 +38,8 @@ Nuxt listens on `http://localhost:3000`. Set `NUXT_PUBLIC_API_BASE` (default `ht
 
 2. Run this admin on `:3000` with `NUXT_PUBLIC_API_BASE=http://localhost:5080`. Leave `NUXT_API_INTERNAL` unset.
 3. Development CORS on the API allows `Frontend:Origin` (`http://localhost:3000`) with credentials. Production leaves CORS off.
-4. Auth calls go to `/identity/*` (CSRF header `RequestVerificationToken`) with `credentials: 'include'`. Passkeys use `/account/passkeys/*`. External logins use `/auth/*`.
-5. Confirm-email links redirect to `http://localhost:3000/confirm-email`. Identity mail is written to `emails/` on the API host. The check-email page calls this app's Nitro route `/api/confirm-email`, which fetches `/identity/confirmEmail` on the API. Locally that fetch uses `NUXT_PUBLIC_API_BASE`.
+4. Auth calls go to `/auth/*` (CSRF header `RequestVerificationToken`) with `credentials: 'include'`. Passkeys use `/auth/passkeys/*`. External logins use `/auth/external/*`.
+5. Confirm-email links redirect to `http://localhost:3000/confirm-email`. Identity mail is written to `emails/` on the API host. The check-email page calls this app's Nitro route `/api/confirm-email`, which fetches `/auth/confirmEmail` on the API. Locally that fetch uses `NUXT_PUBLIC_API_BASE`.
 
 ## Same-origin production
 
@@ -49,7 +49,7 @@ Set `NUXT_API_INTERNAL=http://webapi:8080` for the Nitro confirm-email fetch. Th
 
 `credentials: 'include'` stays. Cookies are host-only. The API's passkeys `ServerDomain` is the public hostname. The confirm-email redirect and allowed origins are that host's `https` origin. Production rejects an `http` redirect.
 
-This image is Node SSR, which is what compose runs. A static `file_server` swap is documented in the example README and is not the default. Static files do not run the Nitro confirm-email helper. Email links that open `/identity/confirmEmail` still redirect the browser to `/confirm-email`.
+This image is Node SSR, which is what compose runs. A static `file_server` swap is documented in the example README and is not the default. Static files do not run the Nitro confirm-email helper. Email links that open `/auth/confirmEmail` still redirect the browser to `/confirm-email`.
 
 ## Scripts
 

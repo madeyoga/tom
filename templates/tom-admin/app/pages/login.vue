@@ -133,12 +133,12 @@ async function loginPasskey() {
   errorMessage.value = ''
   busy.value = true
   try {
-    const optionsJson = await api<string | object>('/account/passkeys/requestOptions', {
+    const optionsJson = await api<string | object>('/auth/passkeys/requestOptions', {
       method: 'POST',
       body: passkeyUsername.value ? { email: passkeyUsername.value } : {}
     })
     const credentialJson = await getPasskeyCredential(optionsJson)
-    await api('/account/passkeys/login', {
+    await api('/auth/passkeys/login', {
       method: 'POST',
       query: { useCookies: true },
       body: { credentialJson }

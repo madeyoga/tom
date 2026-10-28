@@ -2,11 +2,13 @@ using System.Text.Json.Serialization;
 using AuthEndpoints;
 using AuthEndpoints.Passkey;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Identity;
 using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Shared;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi;
 
 namespace Tom.WebApi.Api.Infrastructure;
@@ -46,12 +48,17 @@ public static class InfrastructureSetup
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured."),
             npgsql => npgsql.SetPostgresVersion(17, 0)));
 
-        services.AddAuthEndpoints<AppUser, AppRole, AppDbContext>(o =>
+        var identity = services.AddPasswordAuth<AppUser, AppDbContext>(o =>
         {
-            o.Passkeys.Enabled = config.GetValue("AuthEndpoints:Passkeys:Enabled", true);
-            o.Passkeys.ServerDomain = config["AuthEndpoints:Passkeys:ServerDomain"] ?? "localhost";
+            o.Session = AuthEndpointsSession.Cookie;
+            o.Path = "/auth";
             o.RequireConfirmedAccount = config.GetValue("AuthEndpoints:RequireConfirmedAccount", true);
-            o.Jwt.Enabled = config.GetValue("AuthEndpoints:Jwt:Enabled", false);
+            if (config.GetValue("AuthEndpoints:Passkeys:Enabled", true))
+            {
+                var serverDomain = config["AuthEndpoints:Passkeys:ServerDomain"];
+                o.Passkeys.ServerDomain = string.IsNullOrWhiteSpace(serverDomain) ? "localhost" : serverDomain;
+            }
+
             o.EmailConfirmation.ConfirmEmailRedirectUri =
                 config["AuthEndpoints:EmailConfirmation:ConfirmEmailRedirectUri"]
                 ?? "http://localhost:3000/confirm-email";
@@ -71,11 +78,21 @@ public static class InfrastructureSetup
             {
                 o.EmailConfirmation.AllowedRedirectOrigins.Add("http://localhost:3000");
             }
+        });
 
+        // AddPasswordAuth has no role overload. It registers a user store that does not
+        // implement IUserRoleStore, and AddEntityFrameworkStores uses TryAdd, so that
+        // store and the role-less claims factory have to be removed before roles are stored.
+        services.RemoveAll<IUserClaimsPrincipalFactory<AppUser>>();
+        services.RemoveAll<IUserStore<AppUser>>();
+        identity.AddRoles<AppRole>().AddEntityFrameworkStores<AppDbContext>();
+
+        services.Configure<AuthEndpointsReAuthOptions>(options =>
+        {
             var reauthLifetime = config["AuthEndpoints:ReAuth:Lifetime"];
             if (TimeSpan.TryParse(reauthLifetime, out var lifetime))
             {
-                o.ReAuth.Lifetime = lifetime;
+                options.Lifetime = lifetime;
             }
         });
         services.AddPasskeyUserIdFactory(() => Guid.CreateVersion7().ToString());

@@ -24,15 +24,7 @@
 		reverse_proxy admin:3000
 	}
 
-	handle /identity* {
-		import webapi
-	}
-
-	handle /account* {
-		import webapi
-	}
-
-	# External logins from the admin kit live under /auth, not /identity.
+	# Password session, passkeys, and external logins.
 	handle /auth* {
 		import webapi
 	}

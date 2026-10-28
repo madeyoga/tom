@@ -49,7 +49,7 @@ async function registerPassword() {
 
   busy.value = true
   try {
-    await api('/identity/register', {
+    await api('/auth/register', {
       method: 'POST',
       body: {
         email: passwordForm.email,
@@ -77,12 +77,12 @@ async function registerPasskey() {
   errorMessage.value = ''
   busy.value = true
   try {
-    const optionsJson = await api<string | object>('/account/passkeys/register/options', {
+    const optionsJson = await api<string | object>('/auth/passkeys/register/options', {
       method: 'POST',
       body: { email: passkeyEmail.value }
     })
     const credentialJson = await createPasskeyCredential(optionsJson)
-    await api('/account/passkeys/register', {
+    await api('/auth/passkeys/register', {
       method: 'POST',
       query: { useCookies: true },
       body: {

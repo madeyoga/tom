@@ -124,7 +124,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi
     app.MapScalarApiReference();
 }
 
-app.MapAuthEndpoints<AppUser>();  // /identity (+ /account for passkeys)
+app.MapPasswordAuth<AppUser>();  // /auth (passkeys under /auth/passkeys when ServerDomain is set)
 
 var api = app.MapGroup("/api");
 api.MapIdentityModule();
@@ -180,9 +180,9 @@ public partial class Program;
 
 ## Auth and permissions
 
-- **AUTH-01** Use the `AuthEndpoints` NuGet package (3.x) facade: `AddAuthEndpoints<AppUser, AppRole, AppDbContext>(o => ...)`, `UseAuthEndpoints()` after `UseExceptionHandler()`, `MapAuthEndpoints<AppUser>()`. Do not call `AddIdentityApiEndpoints` yourself. Check https://madeyoga.github.io/AuthEndpoints before using any other AuthEndpoints API. To drop public self-registration, compose `MapCookieAuthEndpoints<AppUser>()` with a management map that omits `/register` (see the "composables" docs) instead of the facade map. `[review]`
+- **AUTH-01** Use the `AuthEndpoints` NuGet package (4.x) password facade: `AddPasswordAuth<AppUser, AppDbContext>(o => ...)` with `Session` left at `AuthEndpointsSession.Cookie` and `Path` `/auth`, `UseAuthEndpoints()` after `UseExceptionHandler()`, and `MapPasswordAuth<AppUser>()`. Do not call `AddAuthEndpoints`, `MapAuthEndpoints`, or `AddIdentityApiEndpoints`. `AddPasswordAuth` has no role overload and registers a user store that does not implement `IUserRoleStore`. `AddEntityFrameworkStores` uses `TryAdd`, so remove `IUserClaimsPrincipalFactory<AppUser>` and `IUserStore<AppUser>`, then call `AddRoles<AppRole>().AddEntityFrameworkStores<AppDbContext>()`. Check https://authendpoints.harten.id before using any other AuthEndpoints API. The facade always maps `POST /auth/register`. To drop public self-registration, compose the building blocks and omit sign-up (see the internal-app guide) instead of the facade map. `[review]`
 - **AUTH-02** Identity keys are `Guid`: `AppUser : IdentityUser<Guid>`, `AppRole : IdentityRole<Guid>`, `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>`. `AppUser` sets `Id = Guid.CreateVersion7()` in its constructor. `[archtest]`
-- **AUTH-03** If passkeys stay enabled, register `AddPasskeyUserIdFactory(() => Guid.CreateVersion7().ToString())` so passkey sign-up does not mint v4 IDs, and set `Passkeys.ServerDomain`. Otherwise set `o.Passkeys.Enabled = false`. `[review]`
+- **AUTH-03** If passkeys stay enabled, set `Passkeys.ServerDomain` (a non-whitespace value is what maps the routes) and register `AddPasskeyUserIdFactory(() => Guid.CreateVersion7().ToString())` so passkey sign-up does not mint v4 IDs. Omit `ServerDomain` to leave passkeys unmapped. `PasswordAuthOptions` has no `Passkeys.Enabled` switch. `[review]`
 - **AUTH-04** Cookie sign-in is the default. Enable JWT or bearer only for a named non-browser client. `[review]`
 - **AUTH-05** Register a real `IEmailSender<AppUser>` in Production. Keep `RequireConfirmedAccount = true` unless accounts are created by staff. `[review]`
 - **AUTH-06** API requests without a session get 401, not a 302 redirect. Forbidden gets 403. `[archtest]` (integration test)
@@ -247,7 +247,7 @@ Lifetimes:
 
 - **TEST-01** Integration tests use `WebApplicationFactory<Program>` against real PostgreSQL from `Testcontainers.PostgreSql`, one container per test collection, schema created with `MigrateAsync()`. No EF InMemory or SQLite. `[archtest]` (package scan)
 - **TEST-02** Each endpoint has at least: success, 401 or 403, and 404 or 400. `[review]`
-- **TEST-03** Sign in through the real `/identity/login` and send the antiforgery header from `/identity/csrfToken`. `[review]`
+- **TEST-03** Sign in through the real `/auth/login` and send the antiforgery header from `/auth/csrfToken`. `[review]`
 - **TEST-04** Replace `TimeProvider` with `FakeTimeProvider` (`Microsoft.Extensions.TimeProvider.Testing`) in tests that depend on time. `[review]`
 - **TEST-05** The architecture tests from enforceable-checks.md live in the same test project and run in CI. `[archtest]`
 

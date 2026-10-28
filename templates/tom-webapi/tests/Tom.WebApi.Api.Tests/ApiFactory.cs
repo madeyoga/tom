@@ -93,8 +93,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             HandleCookies = true,
             AllowAutoRedirect = false,
         });
-        (await client.PostAsJsonAsync("/identity/login", new { email, password })).EnsureSuccessStatusCode();
-        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/identity/csrfToken");
+        (await client.PostAsJsonAsync("/auth/login", new { email, password })).EnsureSuccessStatusCode();
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/auth/csrfToken");
         client.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.CsrfToken);
         return client;
     }

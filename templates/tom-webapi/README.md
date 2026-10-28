@@ -41,8 +41,8 @@ The HTTP profile listens on `http://localhost:5080`.
 - Health: `GET /health`
 - OpenAPI: `/openapi/v1.json` (Development, or `OpenApi__Enabled=true`)
 - Scalar: `/scalar` (same condition)
-- CSRF: `GET /identity/csrfToken` (header name `RequestVerificationToken`)
-- Passkeys: `/account/passkeys/*`
+- CSRF: `GET /auth/csrfToken` (header name `RequestVerificationToken`)
+- Passkeys: `/auth/passkeys/*`
 - Example notes: `GET /api/notes`, `POST /api/notes` (Admin role, antiforgery on writes)
 
 ## Tests
@@ -67,7 +67,7 @@ Email confirmation redirects to `http://localhost:3000/confirm-email` (`AuthEndp
 
 ## Same-origin production
 
-[`examples/same-origin`](../../examples/same-origin) is one public host. Caddy sends `/identity*`, `/account*` (passkeys), `/auth*` (external logins), `/api*`, `/health`, `/scalar*`, and `/openapi*` to this API, and every other path to Nuxt. `/api/confirm-email` stays on Nuxt: it is the confirm-email helper, not an API proxy. The browser uses a relative API base, so cookies are host-only. Do not set `SameSite=None`.
+[`examples/same-origin`](../../examples/same-origin) is one public host. Caddy sends `/auth*` (password session, passkeys, and external logins), `/api*`, `/health`, `/scalar*`, and `/openapi*` to this API, and every other path to Nuxt. `/api/confirm-email` stays on Nuxt: it is the confirm-email helper, not an API proxy. The browser uses a relative API base, so cookies are host-only. Do not set `SameSite=None`.
 
 `Dockerfile` is multi-stage (`sdk` then `aspnet`). The image listens on `8080` (`ASPNETCORE_URLS=http://+:8080`). TLS ends at Caddy. The entrypoint chowns the `keys/` and `emails/` mounts, then drops to the non-root `app` user. `dotnet new` replaces the `Tom.WebApi` source name in that file. `src/Tom.WebApi.Api/Data/Migrations` contains `Initial`. Development `dotnet run` applies it on `:5080`. The example compose `migrate` stage runs `dotnet ef database update` before the API starts. Add a new migration when the model changes: `dotnet ef migrations add {Name} --project src/Tom.WebApi.Api --output-dir Data/Migrations`. The API does not apply migrations itself in Production.
 
@@ -83,13 +83,13 @@ Production enables `ForwardedHeaders` for `X-Forwarded-For` and `X-Forwarded-Pro
 
 ## Auth
 
-Cookie login is AuthEndpoints `LoginCookie` at `POST /identity/login`. `?useCookies=true` does nothing. Persistent cookie: `?useSessionCookies=false`.
+Cookie login is the AuthEndpoints 4 password facade at `POST /auth/login` (`Session` is `Cookie`, prefix `/auth`). `?useCookies=true` does nothing. Persistent cookie: `?useSessionCookies=false`.
 
-JWT is off. Passkeys are on (`AuthEndpoints:Passkeys:Enabled`, `ServerDomain` `localhost`). Identity keys are `Guid`. `AppUser` and `AppRole` set `Id = Guid.CreateVersion7()`. Passkey sign-up uses `AddPasskeyUserIdFactory` so those ids are v7 as well. Configurations mark the ids `ValueGeneratedNever()`.
+JWT is not registered. Passkeys are on when `AuthEndpoints:Passkeys:Enabled` is true (the default) and `ServerDomain` is set (`localhost` in Development). `Enabled` false, or a blank domain, leaves passkeys unmapped. Identity keys are `Guid`. Domain entities keep `long` primary keys. `AppUser` and `AppRole` set `Id = Guid.CreateVersion7()`. Passkey sign-up uses `AddPasskeyUserIdFactory` so those ids are v7 as well. Configurations mark the ids `ValueGeneratedNever()`.
 
 `FileEmailSender` writes Identity mail to `emails/` and the log, using `TimeProvider` for the file name. Replace it with SMTP before Production. DataProtection keys live in `keys/` (gitignored).
 
-Production one-shot Admin: set `Seed__BootstrapAdminEmail` and `Seed__BootstrapAdminPassword` in the environment (not `.env`) when no Admin exists. `POST /identity/register` does not assign roles. Development never uses those bootstrap keys when `Seed__Password` is set; without it, Development logs a warning and skips the Admin user.
+Production one-shot Admin: set `Seed__BootstrapAdminEmail` and `Seed__BootstrapAdminPassword` in the environment (not `.env`) when no Admin exists. `POST /auth/register` does not assign roles. Development never uses those bootstrap keys when `Seed__Password` is set; without it, Development logs a warning and skips the Admin user.
 
 ## Host choices
 

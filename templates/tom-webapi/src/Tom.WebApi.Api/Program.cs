@@ -54,7 +54,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi
     app.MapScalarApiReference(options => options.Title = "Tom.WebApi");
 }
 
-app.MapAuthEndpoints<AppUser>().WithTags("Authentication & Authorization");
+app.MapPasswordAuth<AppUser>().WithTags("Authentication & Authorization");
 
 var api = app.MapGroup("/api");
 api.MapIdentityModule();

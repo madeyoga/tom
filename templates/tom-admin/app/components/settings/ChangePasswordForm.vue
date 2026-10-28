@@ -45,7 +45,7 @@ async function onSubmit() {
       newPassword: form.newPassword
     }
     const done = await stepUp.run(async ({ reauthToken }) => {
-      await api<ManageInfo>('/identity/manage/info', {
+      await api<ManageInfo>('/auth/manage/info', {
         method: 'POST',
         body,
         ...reauthRequest(reauthToken)

@@ -81,7 +81,7 @@ function disconnectProvider(scheme: string) {
 async function refreshTwoFactor() {
   loadingTwoFactor.value = true
   try {
-    twoFactor.value = normalizeTwoFactorResponse(await api('/identity/manage/2fa'))
+    twoFactor.value = normalizeTwoFactorResponse(await api('/auth/manage/2fa'))
   } catch {
     twoFactor.value = null
   } finally {
@@ -91,7 +91,7 @@ async function refreshTwoFactor() {
 
 async function refreshAuthMethods() {
   try {
-    authMethods.value = normalizeAuthMethods(await api('/identity/manage/authMethods'))
+    authMethods.value = normalizeAuthMethods(await api('/auth/manage/authMethods'))
   } catch {
     authMethods.value = null
   }
@@ -100,7 +100,7 @@ async function refreshAuthMethods() {
 async function refreshPasskeys() {
   loadingPasskeys.value = true
   try {
-    passkeyCount.value = readPasskeys(await api('/account/passkeys/')).length
+    passkeyCount.value = readPasskeys(await api('/auth/passkeys/')).length
   } catch {
     passkeyCount.value = 0
   } finally {
@@ -146,7 +146,7 @@ function onEnablePendingCodes(codes: string[]) {
 async function disableTwoFactor() {
   try {
     const done = await stepUp.run(async ({ reauthToken }) => {
-      await api('/identity/manage/2fa', {
+      await api('/auth/manage/2fa', {
         method: 'POST',
         body: { enable: false },
         ...reauthRequest(reauthToken)
@@ -185,7 +185,7 @@ async function confirmRegenerateRecoveryCodes() {
 
   try {
     const result = await stepUp.run(async ({ reauthToken }) => {
-      return await api<TwoFactorStatus>('/identity/manage/2fa', {
+      return await api<TwoFactorStatus>('/auth/manage/2fa', {
         method: 'POST',
         body: { resetRecoveryCodes: true },
         ...reauthRequest(reauthToken)
@@ -220,7 +220,7 @@ async function confirmRegenerateRecoveryCodes() {
 
 async function resendEmailConfirmation() {
   try {
-    await api('/identity/resendConfirmationEmail', {
+    await api('/auth/resendConfirmationEmail', {
       method: 'POST',
       body: displayedEmail.value ? { email: displayedEmail.value } : {}
     })

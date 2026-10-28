@@ -2,7 +2,7 @@ import { normalizeApiBase } from '#shared/utils/apiBase'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-export const CSRF_PATH = '/identity/csrfToken'
+export const CSRF_PATH = '/auth/csrfToken'
 
 interface ApiRequestOptions {
   method?: HttpMethod

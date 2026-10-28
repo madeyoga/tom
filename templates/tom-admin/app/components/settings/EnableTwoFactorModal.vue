@@ -34,7 +34,7 @@ const otp = ref<string[]>([])
 const verifying = ref(false)
 
 async function postManage2fa(reauthToken: string, body: Record<string, unknown>) {
-  const raw = await api<TwoFactorStatus>('/identity/manage/2fa', {
+  const raw = await api<TwoFactorStatus>('/auth/manage/2fa', {
     method: 'POST',
     body,
     ...reauthRequest(reauthToken)

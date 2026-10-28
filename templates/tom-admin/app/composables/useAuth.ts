@@ -106,7 +106,7 @@ export function useAuth() {
     if (extra?.twoFactorRecoveryCode) {
       body.twoFactorRecoveryCode = extra.twoFactorRecoveryCode
     }
-    await api('/identity/login', {
+    await api('/auth/login', {
       method: 'POST',
       query: rememberMe ? { useSessionCookies: false } : { useSessionCookies: true },
       body,
@@ -128,7 +128,7 @@ export function useAuth() {
     changedEmail?: string
   }) => {
     const flow = query.changedEmail ? 'change-email' : 'confirm'
-    const path = '/identity/confirmEmail'
+    const path = '/auth/confirmEmail'
     const url = `${baseURL.value}${path}`
 
     try {
