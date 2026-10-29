@@ -2,7 +2,7 @@
 
 How each SKILL.md rule can be checked by a machine, and which rules stay with review. Package versions are the latest stable on nuget.org on 2026-09-26. Pin them when adopting.
 
-Compiled and run on 2026-09-26 in a scratch solution (SDK 10.0.401, EF Core 10.0.4 via Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3, Scalar.AspNetCore 2.17.10, AuthEndpoints 3.1.0, NetArchTest.Rules 1.3.2, Testcontainers.PostgreSql 4.15.0): the build passes with warnings as errors, all tests pass, and each ban, analyzer rule, and architecture rule was shown to fail on a deliberate violation. Re-check after major package upgrades. The template now references AuthEndpoints 4.0.4.
+Compiled and run on 2026-09-26 in a scratch solution (SDK 10.0.401, EF Core 10.0.4 via Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3, Scalar.AspNetCore 2.17.10, AuthEndpoints 3.1.0, NetArchTest.Rules 1.3.2, Testcontainers.PostgreSql 4.15.0): the build passes with warnings as errors, all tests pass, and each ban, analyzer rule, and architecture rule was shown to fail on a deliberate violation. Re-check after major package upgrades.
 
 ## 1. Build settings
 
@@ -271,7 +271,7 @@ Verified with NetArchTest.Rules 1.3.2: `ResideInNamespaceMatching` and `FailingT
 | CODE-03, DATA-13 | Every interface declared in the API project has at least two implementations in the assembly, or is listed in `AllowedSingleImplementationInterfaces` in the test with a reason. No type named `*Repository` or `*UnitOfWork`. |
 | API-01 | Every public static method named `Map*Api` is on a `public static class` named `*Api` in a feature namespace. |
 | MOD-01 | Every feature has a static class `{Feature}Module` in namespace `{Root}.{Feature}` exactly with `Add{Feature}Module(IServiceCollection, IConfiguration)` and `Map{Feature}Module(IEndpointRouteBuilder)`. `Program.cs` text contains both calls. |
-| AUTH-02 | `typeof(AppUser).BaseType == typeof(IdentityUser<Guid>)`, same for `AppRole`, `AppDbContext` derives from `IdentityDbContext<AppUser, AppRole, Guid>`, and `new AppUser().Id.Version == 7`. |
+| AUTH-02 | New projects: `typeof(AppUser).BaseType == typeof(IdentityUser<Guid>)`, same for `AppRole`, `AppDbContext` derives from `IdentityDbContext<AppUser, AppRole, Guid>`, and `new AppUser().Id.Version == 7`. An existing `long` Identity key is left alone. |
 | AUTH-07 | Every `{Feature}Permissions` const matches `^[A-Z][A-Za-z]+\.[A-Z][A-Za-z]+$` and is unique. |
 | SEED-01 | Every `IDataSeeder` implementation is registered (see 4.4) and has a distinct `Order`. |
 | ERR-05 | No type in `Arch.Api` derives from `System.Exception`. Expected failures are `Result`/`ProblemHttpResult` values. |
@@ -413,8 +413,8 @@ Capture descriptors with `factory.WithWebHostBuilder(b => b.ConfigureTestService
 | Rule | Check |
 |---|---|
 | DATA-02 | Every entity CLR type in `{Root}.Data` has exactly one `IEntityTypeConfiguration<T>` implementation in `{Root}.Data`, except `AppUser` and `AppRole` when Identity's mapping is enough. No entity type lives outside `{Root}.Data`. The file placement is checked in 4.8. |
-| DATA-05 | Every single-column primary key stored as `Guid` has `ValueGenerated == ValueGenerated.Never`. That includes a raw `Guid` and a typed ID whose value converter provider type is `Guid`. |
-| DATA-04 | Report (not fail) the key types per entity so a mixed aggregate is visible in the test output. Mixing is a review call. |
+| DATA-05 | Typed-id primary keys have `ValueGenerated == ValueGenerated.Never` (asserted with DATA-04). `Guid.NewGuid` stays banned. Identity `Guid` keys are not retargeted; AUTH-02 checks `new AppUser().Id.Version == 7`. |
+| DATA-04 | New projects only. Every `IGuidId` is a value type with a public static `New()` that returns itself, implements `IParsable<>` of itself, and has `[JsonConverter(typeof(GuidIdJsonConverter<>))]`. Every EF property of that CLR type has a converter to `Guid` and column type `uuid`. Primary keys among them are `ValueGenerated.Never`. `AppUser` and `AppRole` are not `IGuidId`. An existing `long`-key app does not add this test and is not migrated. |
 
 ### 4.6 Project and file scans
 
@@ -433,7 +433,7 @@ Find the repo root by walking up from `AppContext.BaseDirectory` to the `.sln`/`
 
 | Rule | Check |
 |---|---|
-| AUTH-06 | For every `/api` GET endpoint that requires a policy, call it anonymously (route values filled with `1` or a v7 Guid by constraint). Expect 401, never 302. Call one with a user lacking the permission, expect 403. |
+| AUTH-06 | For every `/api` GET endpoint that requires a policy, call it anonymously (route values filled with a v7 Guid string for `{id:guid}`; an existing `{id:long}` route still uses `1`). Expect 401, never 302. Call one with a user lacking the permission, expect 403. |
 | ERR-01 | `GET /api/does-not-exist` returns 404 with `application/problem+json`. A request that fails validation returns 400 `application/problem+json` with `errors`. Stack traces never appear in Production 500 bodies (review: needs a throwing test endpoint, which is awkward to add from `WebApplicationFactory`). |
 | API-09 | `POST /api/notes` returns 201 with a `Location` header that resolves with GET (reference.md, `Create_returns_201_with_location`). |
 | DOC-02 | Under `UseEnvironment("Production")`, `GET /openapi/v1.json` returns 404 without `OpenApi:Enabled` and 200 with `OpenApi:Enabled=true` (reference.md, `OpenApiExposureTests`). |
@@ -677,7 +677,7 @@ public class WriteOwnershipTests
 
 It matches by member name, not by type, so a DTO with a same-named property is a false positive: add that file to the allowlist with a reason, or rename the DTO property.
 
-Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, NetArchTest.Rules 1.3.2, and Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 in a scratch solution with this layout (the reference.md `Note`, `AppUser`, `DbTransactions`, `NoteService`, and navigation-based report query compiled, and the report query translated to SQL). Each test in 4.1 (layers), 4.8, and 4.9 failed on a deliberate violation and passed once it was fixed: `Data/` and `Shared/` referencing a feature or `Data`, a `FeatureA -> FeatureB -> FeatureA` loop (through a fully qualified call, a `using`, and a global using), a feature using a `Reports/` type, a `Models`-style sub-namespace, a `Data/` file named after no type with a misplaced configuration, a query expression, and a `Balance` write through `-=`, an initializer, and `SetProperty` outside the owner. A one-way `FeatureB -> FeatureA` call, `Program.cs` registering `Reports`, and `{Root}.Data.Migrations` did not fail.
+Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, NetArchTest.Rules 1.3.2, and Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 in a scratch solution with this layout (the reference.md `Note`, `AppUser`, `DbTransactions`, `NoteService`, and navigation-based report query compiled, and the report query translated to SQL). That run still used a `long` key on `Note`. The typed id in reference.md is the current shape. Each test in 4.1 (layers), 4.8, and 4.9 failed on a deliberate violation and passed once it was fixed: `Data/` and `Shared/` referencing a feature or `Data`, a `FeatureA -> FeatureB -> FeatureA` loop (through a fully qualified call, a `using`, and a global using), a feature using a `Reports/` type, a `Models`-style sub-namespace, a `Data/` file named after no type with a misplaced configuration, a query expression, and a `Balance` write through `-=`, an initializer, and `SetProperty` outside the owner. A one-way `FeatureB -> FeatureA` call, `Program.cs` registering `Reports`, and `{Root}.Data.Migrations` did not fail.
 
 ## 5. Rule map
 
@@ -692,7 +692,7 @@ Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, N
 | STR-07 | 4.8 | DATA-01 | review |
 | MOD-01 | 4.2 | DATA-02 | 4.5, 4.8, ban (mapping attributes) |
 | MOD-02 | review | DATA-03 | review |
-| MOD-03 | 4.1, 4.8 | DATA-04 | review (4.5 reports) |
+| MOD-03 | 4.1, 4.8 | DATA-04 | 4.5 on new projects; existing long-key apps stay |
 | MOD-04 | review, 4.8 (query syntax) | DATA-05 | ban `Guid.NewGuid`, 4.5 |
 | MOD-05 | review, optional 4.9 | DATA-06 | ban (SaveChanges, Migrate), review (sync LINQ) |
 | MOD-06 | 4.1 | DATA-07 | review |
@@ -710,6 +710,7 @@ Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, N
 | API-03 | ban `Results`, 4.3 | CODE-03 | 4.2 |
 | API-04 | review (ASP0018/22/23 help) | CODE-04 | 4.2, review |
 | API-05 | 4.3 | CODE-05 | 4.1 |
+| CODE-06 | review | | |
 | API-06 | 4.3 | DI-01 | review |
 | API-07 | 4.3 | DI-02 | 4.4 (ValidateScopes) |
 | API-08 | CA2016 | DI-03 | 4.4 |
@@ -734,8 +735,8 @@ Verified on 2026-09-27 with SDK 10.0.401, Microsoft.CodeAnalysis.CSharp 5.9.0, N
 
 These need judgment. Agents check them against the diff and list any deviation in the PR description.
 
-- Design: MOD-02, MOD-04 (`.Join`), MOD-05 (unless 4.9 is added), MOD-07, MOD-08, MOD-10, MOD-12 (fix order), PRG-01, API-02 (beyond the lambda check), API-04, API-09, API-10, CODE-02, DI-01.
-- Data: DATA-01, DATA-03, DATA-04, DATA-06 (sync LINQ), DATA-07, DATA-14 (`.Join`), DATA-15, DATA-16, DATA-10, DATA-11, DATA-12, DI-08.
+- Design: MOD-02, MOD-04 (`.Join`), MOD-05 (unless 4.9 is added), MOD-07, MOD-08, MOD-10, MOD-12 (fix order), PRG-01, API-02 (beyond the lambda check), API-04, API-09, API-10, CODE-02, CODE-06, DI-01.
+- Data: DATA-01, DATA-03, DATA-04 (leave an existing `long`-key app alone; do not migrate), DATA-06 (sync LINQ), DATA-07, DATA-14 (`.Join`), DATA-15, DATA-16, DATA-10, DATA-11, DATA-12, DI-08. The OpenAPI `string`/`uuid` schema for a typed id is review.
 - Errors and security: ERR-02, ERR-03 (beyond the report), ERR-04, ERR-05 (throw sites), ERR-06, AUTH-01, AUTH-03 to AUTH-05, AUTH-08.
 - DTOs and docs: DTO-01, DTO-04, DTO-06, DOC-03.
 - Seeding and tests: SEED-02, SEED-03, TEST-02 to TEST-04.

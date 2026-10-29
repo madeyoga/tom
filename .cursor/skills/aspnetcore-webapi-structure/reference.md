@@ -16,13 +16,14 @@ src/{App}.Api/
 ├── Shared/
 │   ├── CurrentUser.cs
 │   ├── IDataSeeder.cs
+│   ├── GuidIds.cs                    # IGuidId + GuidIdJsonConverter<TId>
 │   ├── Pagination.cs                 # PaginatedItems<T>, PaginationRequest
 │   ├── Problems.cs                   # TypedResults.Problem helpers
 │   └── Result.cs                     # Result<T> / Result for services
 ├── Data/
 │   ├── AppDbContext.cs
 │   ├── AppUser.cs, AppRole.cs        # Identity entities
-│   ├── Note.cs                       # entity + NoteConfiguration
+│   ├── Note.cs                       # NoteId, entity, NoteConfiguration
 │   └── Migrations/
 ├── Identity/
 │   ├── IdentityModule.cs
@@ -45,26 +46,24 @@ tests/{App}.Api.Tests/
 
 ## Entity and configuration
 
-`Data/Note.cs`: the entity, its typed id, and its configuration in one file named after the entity (DATA-02). `AppDbContext` exposes `public DbSet<Note> Notes => Set<Note>();` (DATA-03).
+`Data/Note.cs`: the typed id, the entity, and its configuration in one file named after the entity (DATA-02). Move `NoteId` to its own file when a second entity stores one. `AppDbContext` exposes `public DbSet<Note> Notes => Set<Note>();` (DATA-03). The converter type is `Shared/GuidIds.cs` (below).
 
 ```csharp
 namespace {App}.Api.Data;
 
-[JsonConverter(typeof(NoteIdJsonConverter))]
-public readonly record struct NoteId(Guid Value) : IParsable<NoteId>
+[JsonConverter(typeof(GuidIdJsonConverter<NoteId>))]
+public readonly record struct NoteId(Guid Value) : IGuidId, IParsable<NoteId>
 {
     public static NoteId New() => new(Guid.CreateVersion7());
 
     public static NoteId Parse(string s, IFormatProvider? provider)
-        => TryParse(s, provider, out var result)
-            ? result
-            : throw new FormatException($"'{s}' is not a NoteId.");
+        => TryParse(s, provider, out var id) ? id : throw new FormatException($"'{s}' is not a note id.");
 
     public static bool TryParse(string? s, IFormatProvider? provider, out NoteId result)
     {
         if (Guid.TryParse(s, provider, out var value))
         {
-            result = new NoteId(value);
+            result = new(value);
             return true;
         }
 
@@ -75,31 +74,12 @@ public readonly record struct NoteId(Guid Value) : IParsable<NoteId>
     public override string ToString() => Value.ToString();
 }
 
-public sealed class NoteIdJsonConverter : JsonConverter<NoteId>
-{
-    public override NoteId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String && reader.TryGetGuid(out var value)
-            ? new NoteId(value)
-            : throw new JsonException("A NoteId must be a GUID string.");
-
-    public override void Write(Utf8JsonWriter writer, NoteId value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.Value);
-}
-
-public sealed class NoteIdValueConverter : ValueConverter<NoteId, Guid>
-{
-    public NoteIdValueConverter()
-        : base(id => id.Value, value => new NoteId(value))
-    {
-    }
-}
-
 internal sealed class Note
 {
     public NoteId Id { get; set; } = NoteId.New();
     public required string Title { get; set; }
     public string? Body { get; set; }
-    public Guid OwnerUserId { get; set; }
+    public Guid OwnerUserId { get; set; }            // AppUser's key is Guid (AUTH-02)
     public AppUser Owner { get; set; } = null!;     // navigation (DATA-15)
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ArchivedAt { get; set; }
@@ -110,7 +90,10 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
     public void Configure(EntityTypeBuilder<Note> builder)
     {
         builder.ToTable("notes");
-        builder.Property(x => x.Id).ValueGeneratedNever();
+        builder.Property(x => x.Id)
+            .HasConversion(id => id.Value, value => new NoteId(value))
+            .HasColumnType("uuid")
+            .ValueGeneratedNever();
         builder.Property(x => x.Title).HasMaxLength(200);
         builder.Property(x => x.Body).HasMaxLength(4000);
         builder.HasIndex(x => new { x.OwnerUserId, x.CreatedAt });
@@ -120,15 +103,11 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
 }
 ```
 
-`AppDbContext.ConfigureConventions` registers the converter for every `NoteId` property. The column stays `uuid` (DATA-04, DATA-05):
-
-```csharp
-configurationBuilder.Properties<NoteId>()
-    .HaveConversion<NoteIdValueConverter>()
-    .HaveColumnType("uuid");
-```
+`ToString()` is the Guid string, so `CreatedAtRoute(..., new { id = note.Id })` writes `/api/notes/{guid}`. JSON uses that same string, not `{ "value": "..." }`. A foreign key that points at `Note` is a `NoteId` and uses the same `HasConversion`. `OwnerUserId` stays `Guid` because it points at `AppUser`.
 
 ## Identity
+
+Identity keys stay `Guid`, not a typed id (AUTH-02). `CurrentUser.UserId` is that `Guid`.
 
 ```csharp
 // Data/AppUser.cs, Data/AppRole.cs, Data/AppDbContext.cs (namespace {App}.Api.Data)
@@ -173,7 +152,19 @@ public static class InfrastructureSetup
         services.AddProblemDetails(); // with UseExceptionHandler: unexpected exceptions -> 500 ProblemDetails (ERR-01)
         services.AddValidation();
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-        services.AddOpenApi();
+        services.AddOpenApi(o => o.AddSchemaTransformer((schema, context, _) =>
+        {
+            // JsonSchemaType is Microsoft.OpenApi. A JsonConverter otherwise becomes an empty schema, and IParsable becomes an object.
+            var type = Nullable.GetUnderlyingType(context.JsonTypeInfo.Type) ?? context.JsonTypeInfo.Type;
+            if (typeof(IGuidId).IsAssignableFrom(type))
+            {
+                schema.Type = JsonSchemaType.String;
+                schema.Format = "uuid";
+                schema.Properties?.Clear();
+                schema.Required?.Clear();
+            }
+            return Task.CompletedTask;
+        }));
 
         // Resolve the connection string lazily so tests can override configuration.
         // Design-time tools build the host too: run `dotnet ef` with ConnectionStrings__Default set.
@@ -181,15 +172,10 @@ public static class InfrastructureSetup
             sp.GetRequiredService<IConfiguration>().GetConnectionString("Default")
             ?? throw new InvalidOperationException("ConnectionStrings:Default is not set.")));
 
-        var identity = services.AddPasswordAuth<AppUser, AppDbContext>(o =>
+        services.AddAuthEndpoints<AppUser, AppRole, AppDbContext>(o =>
         {
-            o.Session = AuthEndpointsSession.Cookie;
-            o.Path = "/auth";
-            // Omit Passkeys.ServerDomain to leave passkeys off, or set it and call AddPasskeyUserIdFactory (AUTH-03).
+            o.Passkeys.Enabled = false; // or ServerDomain + AddPasskeyUserIdFactory (AUTH-03)
         });
-        services.RemoveAll<IUserClaimsPrincipalFactory<AppUser>>();
-        services.RemoveAll<IUserStore<AppUser>>();
-        identity.AddRoles<AppRole>().AddEntityFrameworkStores<AppDbContext>();
         services.AddTransient<IEmailSender<AppUser>, SmtpEmailSender>();
         services.ConfigureApplicationCookie(o =>
         {
@@ -278,6 +264,30 @@ public interface IDataSeeder
     int Order { get; }
     bool IsCritical { get; }
     Task SeedAsync(CancellationToken ct);
+}
+```
+
+`Shared/GuidIds.cs`. Every typed id uses this converter (DATA-04). `[JsonConverter]` on the id type is what HTTP, OpenAPI, and `ReadFromJsonAsync` in tests all see.
+
+```csharp
+public interface IGuidId
+{
+    Guid Value { get; }
+}
+
+public sealed class GuidIdJsonConverter<TId> : JsonConverter<TId>
+    where TId : struct, IGuidId, IParsable<TId>
+{
+    public override TId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var text = reader.GetString();
+        return text is not null && TId.TryParse(text, null, out var id)
+            ? id
+            : throw new JsonException($"Expected a Guid string for {typeof(TId).Name}.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, TId value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.Value);
 }
 ```
 
@@ -562,8 +572,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public async Task<HttpClient> SignInAsync(string email, string password)
     {
         var client = CreateClient(new() { HandleCookies = true, AllowAutoRedirect = false });
-        (await client.PostAsJsonAsync("/auth/login", new { email, password })).EnsureSuccessStatusCode();
-        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/auth/csrfToken");
+        (await client.PostAsJsonAsync("/identity/login", new { email, password })).EnsureSuccessStatusCode();
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/identity/csrfToken");
         client.DefaultRequestHeaders.Add("RequestVerificationToken", csrf!.CsrfToken);
         return client;
     }
@@ -640,8 +650,9 @@ Production mode in tests needs what Production needs: a registered `IEmailSender
 
 Not part of the default skill. Add only when the application needs tenants.
 
-- A `Tenancy/` feature owns the state of `Data/Tenant.cs` and provides `Tenancy/CurrentTenant` (`Guid TenantId` read from a `tenant_id` claim). Add the claim at sign-in with a custom `IUserClaimsPrincipalFactory<AppUser>` so requests do not hit the database.
-- Tenant-owned entities implement `Shared/ITenantOwned { Guid TenantId { get; set; } }`. The filter uses the scalar `TenantId`; a navigation to `Tenant` is optional.
+- A `Tenancy/` feature owns the state of `Data/Tenant.cs` and provides `Tenancy/CurrentTenant` (`TenantId` parsed from a `tenant_id` claim, the Guid string). Add the claim at sign-in with a custom `IUserClaimsPrincipalFactory<AppUser>` so requests do not hit the database.
+- `TenantId` is that entity's typed id (DATA-04) and lives in `Shared/`, so `ITenantOwned` does not make `Shared/` depend on `Data/`.
+- Tenant-owned entities implement `Shared/ITenantOwned { TenantId TenantId { get; set; } }`. The filter uses the scalar `TenantId`; a navigation to `Tenant` is optional.
 - `AppDbContext` takes `CurrentTenant` in its constructor and, after `ApplyConfigurationsFromAssembly`, applies a named filter to every `ITenantOwned` type: `builder.Entity<T>().HasQueryFilter("Tenant", e => e.TenantId == TenantId)` where `TenantId` is a context property. This is the one allowed addition to `OnModelCreating` (DATA-01).
 - A `SaveChangesInterceptor` sets `TenantId` on added `ITenantOwned` rows and rejects changes to it on modified rows.
 - Cross-tenant reads use `IgnoreQueryFilters(["Tenant"])` only in endpoints guarded by a platform-admin permission. Flag every use in review, or ban the parameterless `IgnoreQueryFilters` in `BannedSymbols.txt`.
