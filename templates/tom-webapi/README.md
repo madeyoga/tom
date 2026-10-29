@@ -1,6 +1,6 @@
 # Tom.WebApi
 
-Opinionated ASP.NET Core 10 Web API solution. PostgreSQL, Identity with `Guid` keys (UUID v7 on create, including passkey sign-up), AuthEndpoints cookie sign-in, OpenAPI and Scalar in Development. Domain entities keep `long` primary keys. The `Notes` folder is a small example feature; delete it and the `AddNotesModule` / `MapNotesModule` calls in `Program.cs` when you add a real feature. Entities, configurations, and `AppDbContext` live in `Data/`.
+Opinionated ASP.NET Core 10 Web API solution. PostgreSQL, Identity with `Guid` keys (UUID v7 on create, including passkey sign-up), AuthEndpoints cookie sign-in, OpenAPI and Scalar in Development. Domain primary keys are Guid v7 values wrapped in a typed ID (`NoteId`) and stored in a `uuid` column. The API sends and accepts that value as a plain Guid string. The `Notes` folder is a small example feature; delete it and the `AddNotesModule` / `MapNotesModule` calls in `Program.cs` when you add a real feature. Entities, configurations, and `AppDbContext` live in `Data/`.
 
 ```text
 src/Tom.WebApi.Api/          # the API
@@ -15,7 +15,7 @@ tests/Tom.WebApi.Api.Tests/  # Testcontainers PostgreSQL and endpoint tests
 
 | Value | What you get |
 | --- | --- |
-| `lean` | BannedSymbols, BannedApiAnalyzers, `.editorconfig` severities, `TreatWarningsAsErrors` in Release, `ValidateScopes` / `ValidateOnBuild`, Notes endpoint tests, and CI (restore, Release build, test, `dotnet format --verify-no-changes`, gate job `ci`). No `Architecture/` folder and no NetArchTest package. |
+| `lean` | BannedSymbols, BannedApiAnalyzers, `.editorconfig` severities, `TreatWarningsAsErrors` in Release, `ValidateScopes` / `ValidateOnBuild`, Notes endpoint tests, typed-id tests (JSON, EF converter, and a Roslyn compile check), and CI (restore, Release build, test, `dotnet format --verify-no-changes`, gate job `ci`). No `Architecture/` folder and no NetArchTest package. |
 | `full` | Everything in `lean`, plus `tests/<App>.Api.Tests/Architecture/`, NetArchTest, and Roslyn source scans (layer direction, feature cycles, `Reports/` isolation, `Data/` file names, namespaces, and query syntax). |
 
 ```text
@@ -85,7 +85,7 @@ Production enables `ForwardedHeaders` for `X-Forwarded-For` and `X-Forwarded-Pro
 
 Cookie login is the AuthEndpoints 4 password facade at `POST /auth/login` (`Session` is `Cookie`, prefix `/auth`). `?useCookies=true` does nothing. Persistent cookie: `?useSessionCookies=false`.
 
-JWT is not registered. Passkeys are on when `AuthEndpoints:Passkeys:Enabled` is true (the default) and `ServerDomain` is set (`localhost` in Development). `Enabled` false, or a blank domain, leaves passkeys unmapped. Identity keys are `Guid`. Domain entities keep `long` primary keys. `AppUser` and `AppRole` set `Id = Guid.CreateVersion7()`. Passkey sign-up uses `AddPasskeyUserIdFactory` so those ids are v7 as well. Configurations mark the ids `ValueGeneratedNever()`.
+JWT is not registered. Passkeys are on when `AuthEndpoints:Passkeys:Enabled` is true (the default) and `ServerDomain` is set (`localhost` in Development). `Enabled` false, or a blank domain, leaves passkeys unmapped. Identity keys are `Guid`. Domain primary keys are typed IDs over Guid v7 (`NoteId.New()`), stored as `uuid`, and serialized as a plain Guid string. `AppUser` and `AppRole` set `Id = Guid.CreateVersion7()`. Passkey sign-up uses `AddPasskeyUserIdFactory` so those ids are v7 as well. Configurations mark the ids `ValueGeneratedNever()`.
 
 `FileEmailSender` writes Identity mail to `emails/` and the log, using `TimeProvider` for the file name. Replace it with SMTP before Production. DataProtection keys live in `keys/` (gitignored).
 

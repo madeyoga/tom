@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+using Tom.WebApi.Api.Data;
 using Tom.WebApi.Api.Notes;
 
 namespace Tom.WebApi.Api.Tests.Notes;
@@ -21,7 +23,7 @@ public sealed class NoteApiTests(ApiFactory factory)
     [Fact]
     public async Task Anonymous_get_returns_401()
     {
-        var response = await factory.AnonymousClient().GetAsync("/api/notes/1");
+        var response = await factory.AnonymousClient().GetAsync($"/api/notes/{NoteId.New()}");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -35,7 +37,7 @@ public sealed class NoteApiTests(ApiFactory factory)
     [Fact]
     public async Task Anonymous_archive_returns_401()
     {
-        var response = await factory.AnonymousClient().PostAsync("/api/notes/1/archive", content: null);
+        var response = await factory.AnonymousClient().PostAsync($"/api/notes/{NoteId.New()}/archive", content: null);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -64,7 +66,16 @@ public sealed class NoteApiTests(ApiFactory factory)
         var response = await client.PostAsJsonAsync("/api/notes", new { title });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var created = await response.Content.ReadFromJsonAsync<NoteResponse>();
+        var json = await response.Content.ReadAsStringAsync();
+        using (var document = JsonDocument.Parse(json))
+        {
+            var idElement = document.RootElement.GetProperty("id");
+            Assert.Equal(JsonValueKind.String, idElement.ValueKind);
+            Assert.True(Guid.TryParse(idElement.GetString(), out var parsed));
+            Assert.Equal(7, parsed.Version);
+        }
+
+        var created = JsonSerializer.Deserialize<NoteResponse>(json, JsonSerializerOptions.Web);
         Assert.NotNull(created);
         Assert.Equal(title, created.Title);
         Assert.NotNull(response.Headers.Location);
@@ -72,7 +83,15 @@ public sealed class NoteApiTests(ApiFactory factory)
 
         var fetched = await client.GetAsync(response.Headers.Location);
         Assert.Equal(HttpStatusCode.OK, fetched.StatusCode);
-        var body = await fetched.Content.ReadFromJsonAsync<NoteResponse>();
+        var fetchedJson = await fetched.Content.ReadAsStringAsync();
+        using (var fetchedDocument = JsonDocument.Parse(fetchedJson))
+        {
+            var idElement = fetchedDocument.RootElement.GetProperty("id");
+            Assert.Equal(JsonValueKind.String, idElement.ValueKind);
+            Assert.Equal(created.Id.Value.ToString(), idElement.GetString());
+        }
+
+        var body = JsonSerializer.Deserialize<NoteResponse>(fetchedJson, JsonSerializerOptions.Web);
         Assert.Equal(created.Id, body!.Id);
     }
 
@@ -103,7 +122,7 @@ public sealed class NoteApiTests(ApiFactory factory)
     public async Task Get_missing_note_returns_404()
     {
         var client = await factory.AdminClientAsync();
-        var response = await client.GetAsync("/api/notes/999999");
+        var response = await client.GetAsync($"/api/notes/{NoteId.New()}");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
@@ -111,7 +130,7 @@ public sealed class NoteApiTests(ApiFactory factory)
     public async Task Archive_missing_note_returns_404()
     {
         var client = await factory.AdminClientAsync();
-        var response = await client.PostAsync("/api/notes/999999/archive", content: null);
+        var response = await client.PostAsync($"/api/notes/{NoteId.New()}/archive", content: null);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
@@ -151,5 +170,40 @@ public sealed class NoteApiTests(ApiFactory factory)
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var created = await response.Content.ReadFromJsonAsync<NoteResponse>();
         Assert.Equal(instant, created!.CreatedAt);
+    }
+
+    [Fact]
+    public async Task OpenApi_describes_note_id_as_a_uuid_string()
+    {
+        using var app = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Production");
+            builder.UseSetting("OpenApi:Enabled", "true");
+            builder.UseSetting(
+                "AuthEndpoints:EmailConfirmation:ConfirmEmailRedirectUri",
+                "https://localhost/confirm-email");
+            builder.UseSetting(
+                "AuthEndpoints:EmailConfirmation:AllowedRedirectOrigins:0",
+                "https://localhost");
+        });
+
+        var json = await app.CreateClient().GetStringAsync("/openapi/v1.json");
+        using var document = JsonDocument.Parse(json);
+        var id = NoteIdSchema(document.RootElement);
+        Assert.Equal("string", id.GetProperty("type").GetString());
+        Assert.Equal("uuid", id.GetProperty("format").GetString());
+    }
+
+    private static JsonElement NoteIdSchema(JsonElement document)
+    {
+        var schemas = document.GetProperty("components").GetProperty("schemas");
+        var id = schemas.GetProperty("NoteResponse").GetProperty("properties").GetProperty("id");
+        if (id.TryGetProperty("$ref", out var reference))
+        {
+            var name = reference.GetString()!.Split('/').Last();
+            return schemas.GetProperty(name);
+        }
+
+        return id;
     }
 }

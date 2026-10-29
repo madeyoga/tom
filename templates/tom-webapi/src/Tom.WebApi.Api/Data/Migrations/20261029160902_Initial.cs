@@ -180,8 +180,7 @@ namespace Tom.WebApi.Api.Data.Migrations
                 name: "notes",
                 columns: table => new
                 {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityAlwaysColumn),
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Body = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true),
                     OwnerUserId = table.Column<Guid>(type: "uuid", nullable: false),

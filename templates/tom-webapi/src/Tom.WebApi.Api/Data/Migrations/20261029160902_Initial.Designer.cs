@@ -12,7 +12,7 @@ using Tom.WebApi.Api.Data;
 namespace Tom.WebApi.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260926075156_Initial")]
+    [Migration("20261029160902_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -241,11 +241,8 @@ namespace Tom.WebApi.Api.Data.Migrations
 
             modelBuilder.Entity("Tom.WebApi.Api.Data.Note", b =>
                 {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone");

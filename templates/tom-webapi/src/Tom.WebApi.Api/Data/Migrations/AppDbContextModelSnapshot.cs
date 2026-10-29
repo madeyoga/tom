@@ -238,11 +238,8 @@ namespace Tom.WebApi.Api.Data.Migrations
 
             modelBuilder.Entity("Tom.WebApi.Api.Data.Note", b =>
                 {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("ArchivedAt")
                         .HasColumnType("timestamp with time zone");
@@ -339,7 +336,7 @@ namespace Tom.WebApi.Api.Data.Migrations
 
                             b1.HasKey("IdentityUserPasskeyCredentialId");
 
-                            b1.ToTable("AspNetUserPasskeys");
+                            b1.ToTable("AspNetUserPasskeys", (string)null);
 
                             b1
                                 .ToJson("Data")

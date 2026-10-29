@@ -413,7 +413,7 @@ Capture descriptors with `factory.WithWebHostBuilder(b => b.ConfigureTestService
 | Rule | Check |
 |---|---|
 | DATA-02 | Every entity CLR type in `{Root}.Data` has exactly one `IEntityTypeConfiguration<T>` implementation in `{Root}.Data`, except `AppUser` and `AppRole` when Identity's mapping is enough. No entity type lives outside `{Root}.Data`. The file placement is checked in 4.8. |
-| DATA-05 | Every entity with a `Guid` primary key has `ValueGenerated == ValueGenerated.Never`. |
+| DATA-05 | Every single-column primary key stored as `Guid` has `ValueGenerated == ValueGenerated.Never`. That includes a raw `Guid` and a typed ID whose value converter provider type is `Guid`. |
 | DATA-04 | Report (not fail) the key types per entity so a mixed aggregate is visible in the test output. Mixing is a review call. |
 
 ### 4.6 Project and file scans

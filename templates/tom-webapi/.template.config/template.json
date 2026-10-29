@@ -5,7 +5,7 @@
   "identity": "AuthEndpoints.Templates.TomWebApi",
   "groupIdentity": "AuthEndpoints.Templates.TomWebApi",
   "name": "Tom ASP.NET Core Web API",
-  "description": "Opinionated ASP.NET Core 10 Web API: Npgsql, Identity with Guid keys, AuthEndpoints 4 cookie password facade, OpenAPI and Scalar.",
+  "description": "Opinionated ASP.NET Core 10 Web API: Npgsql, Identity with Guid keys, Guid v7 typed entity ids, AuthEndpoints 4 cookie password facade, OpenAPI and Scalar.",
   "shortName": "tom-webapi",
   "sourceName": "Tom.WebApi",
   "preferNameDirectory": true,
@@ -22,7 +22,7 @@
       "choices": [
         {
           "choice": "lean",
-          "description": "Banned symbols, editorconfig severities, Release warnings-as-errors, endpoint tests, and CI. No architecture tests."
+          "description": "Banned symbols, editorconfig severities, Release warnings-as-errors, endpoint and typed-id tests, and CI. No architecture tests."
         },
         {
           "choice": "full",

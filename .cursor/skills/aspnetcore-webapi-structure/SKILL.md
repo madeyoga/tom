@@ -4,7 +4,7 @@ description: >-
   use this when scaffolding or reviewing ASP.NET Core 10 Web APIs built as a
   single-project API with a shared EF data layer and feature folders (minimal
   APIs, TypedResults, EF Core + PostgreSQL, cookie Identity via AuthEndpoints,
-  Guid Identity keys, OpenAPI + Scalar). Covers layout, layers and feature
+  Guid Identity keys, typed Guid v7 entity ids, OpenAPI + Scalar). Covers layout, layers and feature
   rules, endpoints, DTOs, errors, auth, data, reusable code and DI lifetimes,
   seeding, and tests.
 ---
@@ -142,7 +142,7 @@ public partial class Program;
 - **API-01** Minimal APIs only. One resource = one `public static class {Resource}Api` with `Map{Resource}Api(this IEndpointRouteBuilder)` in `{Feature}/{Resource}Api.cs` (or `{Feature}/Apis/` after a MOD-07 split). `[archtest]`
 - **API-02** Handlers are named `private static async` methods. Inline lambdas only for one-line routes. `[review]`
 - **API-03** Return `TypedResults.*`. Declare the exact union: `Task<Results<Ok<T>, NotFound>>`. Never use `Results.*` or `IResult` as a return type. `[banned]` + `[archtest]`
-- **API-04** Routes: camelCase plural nouns (`/notes`, `/noteTags`). Constrain IDs (`{id:long}` or `{id:guid}`). Map literal routes before `{id}`. State changes that are not CRUD are `POST /{id}/{verb}` (`/archive`, `/approve`). `[review]`
+- **API-04** Routes: camelCase plural nouns (`/notes`, `/noteTags`). Constrain IDs (`{id:guid}`); the handler parameter is the typed ID (`IParsable<T>`). Map literal routes before `{id}`. State changes that are not CRUD are `POST /{id}/{verb}` (`/archive`, `/approve`). `[review]`
 - **API-05** Every endpoint has `.WithName("VerbResource")` (unique, becomes the operationId), `.WithSummary(...)`, and a group-level `.WithTags(...)`. `[archtest]`
 - **API-06** Every endpoint has `.RequireAuthorization({Feature}Permissions.X)` or an explicit `.AllowAnonymous()`. `[archtest]`
 - **API-07** With cookie auth, every POST/PUT/PATCH/DELETE under `/api` has `.RequireAntiforgery()`. `[archtest]`
@@ -194,8 +194,8 @@ public partial class Program;
 - **DATA-01** One `AppDbContext` in `Data/`, namespace `{App}.Api.Data`, with migrations in `Data/Migrations/`. `OnModelCreating` calls `base.OnModelCreating` and `ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`, nothing else. `[review]`
 - **DATA-02** One file per entity in `Data/`: the entity class and its `IEntityTypeConfiguration<T>` in the same file, named after the entity (`EntityA.cs`). Small enums and value types used only by that entity may live in the same file; anything used by several entities gets its own file. `ApplyConfigurationsFromAssembly` picks up the configurations. No data annotations for mapping. `[archtest]` + `[banned]` (mapping attributes)
 - **DATA-03** `AppDbContext` exposes one `DbSet<T>` property per entity (`public DbSet<Note> Notes => Set<Note>();`). No `db.X()` extension accessors. `[review]`
-- **DATA-04** Entity keys: default `long` identity columns. Use `Guid` v7 when the key is exposed publicly and enumeration matters, or the client creates the key (offline or idempotent create). Record the project default in the README. All entities in one aggregate use the same key type. `[review]`
-- **DATA-05** Guid keys are set in the app with `Guid.CreateVersion7()` and configured `ValueGeneratedNever()`. Never `Guid.NewGuid()` (v4, poor index locality). `[banned]` + `[archtest]` (EF model)
+- **DATA-04** Primary keys are Guid v7 wrapped in typed IDs (`public readonly record struct NoteId(Guid Value)` with `static NoteId New()` calling `Guid.CreateVersion7()`). An EF value converter stores that Guid in a `uuid` column. The API sends and accepts a plain Guid string (`JsonConverter<T>` plus `IParsable<T>`). Each ID gets its own type. Wrap other values only when a mix-up would compile but be wrong. Identity keys stay `Guid` (AUTH-02): `IdentityDbContext` uses one `TKey` for users and roles. `[review]`
+- **DATA-05** Guid keys and typed IDs are created in the app with `Guid.CreateVersion7()` (typed IDs do that inside `New()`) and configured `ValueGeneratedNever()`. Never `Guid.NewGuid()` (v4, poor index locality). `[banned]` + `[archtest]` (EF model: a single-column key stored as `Guid`, including a typed ID converted to `Guid`, is `ValueGenerated.Never`)
 - **DATA-06** EF calls are async: `SaveChangesAsync`, `ToListAsync`, `FirstOrDefaultAsync`, `MigrateAsync`. `[banned]` for `SaveChanges`/`Migrate`, `[review]` for sync LINQ.
 - **DATA-07** Reads use `AsNoTracking()` and project to DTOs. `[review]`
 - **DATA-08** Get time from the injected `TimeProvider` (registered as `TimeProvider.System`). Never `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`, or `DateTimeOffset.UtcNow`. Store instants as `timestamptz` in UTC. `[banned]`

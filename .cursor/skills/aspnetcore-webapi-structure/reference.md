@@ -45,14 +45,58 @@ tests/{App}.Api.Tests/
 
 ## Entity and configuration
 
-`Data/Note.cs`: the entity and its configuration in one file named after the entity (DATA-02). `AppDbContext` exposes `public DbSet<Note> Notes => Set<Note>();` (DATA-03).
+`Data/Note.cs`: the entity, its typed id, and its configuration in one file named after the entity (DATA-02). `AppDbContext` exposes `public DbSet<Note> Notes => Set<Note>();` (DATA-03).
 
 ```csharp
 namespace {App}.Api.Data;
 
+[JsonConverter(typeof(NoteIdJsonConverter))]
+public readonly record struct NoteId(Guid Value) : IParsable<NoteId>
+{
+    public static NoteId New() => new(Guid.CreateVersion7());
+
+    public static NoteId Parse(string s, IFormatProvider? provider)
+        => TryParse(s, provider, out var result)
+            ? result
+            : throw new FormatException($"'{s}' is not a NoteId.");
+
+    public static bool TryParse(string? s, IFormatProvider? provider, out NoteId result)
+    {
+        if (Guid.TryParse(s, provider, out var value))
+        {
+            result = new NoteId(value);
+            return true;
+        }
+
+        result = default;
+        return false;
+    }
+
+    public override string ToString() => Value.ToString();
+}
+
+public sealed class NoteIdJsonConverter : JsonConverter<NoteId>
+{
+    public override NoteId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => reader.TokenType == JsonTokenType.String && reader.TryGetGuid(out var value)
+            ? new NoteId(value)
+            : throw new JsonException("A NoteId must be a GUID string.");
+
+    public override void Write(Utf8JsonWriter writer, NoteId value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.Value);
+}
+
+public sealed class NoteIdValueConverter : ValueConverter<NoteId, Guid>
+{
+    public NoteIdValueConverter()
+        : base(id => id.Value, value => new NoteId(value))
+    {
+    }
+}
+
 internal sealed class Note
 {
-    public long Id { get; set; }
+    public NoteId Id { get; set; } = NoteId.New();
     public required string Title { get; set; }
     public string? Body { get; set; }
     public Guid OwnerUserId { get; set; }
@@ -66,7 +110,7 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
     public void Configure(EntityTypeBuilder<Note> builder)
     {
         builder.ToTable("notes");
-        builder.Property(x => x.Id).UseIdentityAlwaysColumn();
+        builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Title).HasMaxLength(200);
         builder.Property(x => x.Body).HasMaxLength(4000);
         builder.HasIndex(x => new { x.OwnerUserId, x.CreatedAt });
@@ -76,14 +120,12 @@ internal sealed class NoteConfiguration : IEntityTypeConfiguration<Note>
 }
 ```
 
-Guid v7 variant, for a publicly exposed key (DATA-04, DATA-05):
+`AppDbContext.ConfigureConventions` registers the converter for every `NoteId` property. The column stays `uuid` (DATA-04, DATA-05):
 
 ```csharp
-internal sealed class ShareLink
-{
-    public Guid Id { get; init; } = Guid.CreateVersion7();
-}
-// configuration: builder.Property(x => x.Id).ValueGeneratedNever();
+configurationBuilder.Properties<NoteId>()
+    .HaveConversion<NoteIdValueConverter>()
+    .HaveColumnType("uuid");
 ```
 
 ## Identity
@@ -284,11 +326,11 @@ public static class NoteApi
 
         group.MapGet("/", ListNotes).WithName("ListNotes").WithSummary("List my notes")
             .RequireAuthorization(NotesPermissions.View);
-        group.MapGet("/{id:long}", GetNote).WithName("GetNote").WithSummary("Get a note")
+        group.MapGet("/{id:guid}", GetNote).WithName("GetNote").WithSummary("Get a note")
             .RequireAuthorization(NotesPermissions.View);
         group.MapPost("/", CreateNote).WithName("CreateNote").WithSummary("Create a note")
             .RequireAuthorization(NotesPermissions.Manage).RequireAntiforgery();
-        group.MapPost("/{id:long}/archive", ArchiveNote).WithName("ArchiveNote").WithSummary("Archive a note")
+        group.MapPost("/{id:guid}/archive", ArchiveNote).WithName("ArchiveNote").WithSummary("Archive a note")
             .ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict)
             .RequireAuthorization(NotesPermissions.Manage).RequireAntiforgery();
 
@@ -310,7 +352,7 @@ public static class NoteApi
     }
 
     private static async Task<Results<Ok<NoteResponse>, NotFound>> GetNote(
-        long id, AppDbContext db, CurrentUser user, CancellationToken ct)
+        NoteId id, AppDbContext db, CurrentUser user, CancellationToken ct)
     {
         var note = await db.Notes.AsNoTracking()
             .Where(n => n.Id == id && n.OwnerUserId == user.RequiredUserId)
@@ -337,7 +379,7 @@ public static class NoteApi
 
     // Logic lives in NoteService because another feature also archives notes (MOD-05, ERR-04).
     private static async Task<Results<NoContent, ProblemHttpResult>> ArchiveNote(
-        long id, NoteService notes, CurrentUser user, CancellationToken ct)
+        NoteId id, NoteService notes, CurrentUser user, CancellationToken ct)
     {
         var result = await notes.ArchiveAsync(id, user.RequiredUserId, ct);
         if (result.Problem is { } problem) return problem;
@@ -349,9 +391,9 @@ public sealed record CreateNoteRequest(
     [property: Required, StringLength(200, MinimumLength = 1)] string Title,
     [property: StringLength(4000)] string? Body);
 
-public sealed record NoteResponse(long Id, string Title, string? Body, DateTimeOffset CreatedAt, DateTimeOffset? ArchivedAt);
+public sealed record NoteResponse(NoteId Id, string Title, string? Body, DateTimeOffset CreatedAt, DateTimeOffset? ArchivedAt);
 
-public sealed record NoteListItem(long Id, string Title, DateTimeOffset CreatedAt);
+public sealed record NoteListItem(NoteId Id, string Title, DateTimeOffset CreatedAt);
 ```
 
 `[property: ...]` on positional records is picked up by `AddValidation()` in .NET 10 (checked: an empty `Title` returns 400 `application/problem+json`). `RequireAntiforgery()` on a route handler comes from AuthEndpoints: add `using AuthEndpoints.Identity;`.
@@ -365,7 +407,7 @@ namespace {App}.Api.Notes;
 
 public sealed class NoteService(AppDbContext db, TimeProvider clock)
 {
-    public async Task<Result> ArchiveAsync(long noteId, Guid userId, CancellationToken ct)
+    public async Task<Result> ArchiveAsync(NoteId noteId, Guid userId, CancellationToken ct)
     {
         var note = await db.Notes.FirstOrDefaultAsync(n => n.Id == noteId && n.OwnerUserId == userId, ct);
         if (note is null) return Problems.NotFound("Note not found", $"Note {noteId} does not exist.");
