@@ -17,7 +17,7 @@ public static class NoteApi
             .WithName("ListNotes")
             .WithSummary("List my notes")
             .RequireAuthorization(NotesPermissions.View);
-        group.MapGet("/{id:long}", GetNote)
+        group.MapGet("/{id:guid}", GetNote)
             .WithName("GetNote")
             .WithSummary("Get a note")
             .RequireAuthorization(NotesPermissions.View);
@@ -27,7 +27,7 @@ public static class NoteApi
             .RequireAuthorization(NotesPermissions.Manage)
             .RequireAntiforgery()
             .EnableAntiforgery();
-        group.MapPost("/{id:long}/archive", ArchiveNote)
+        group.MapPost("/{id:guid}/archive", ArchiveNote)
             .WithName("ArchiveNote")
             .WithSummary("Archive a note")
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -64,7 +64,7 @@ public static class NoteApi
     }
 
     private static async Task<Results<Ok<NoteResponse>, NotFound>> GetNote(
-        long id,
+        NoteId id,
         AppDbContext db,
         CurrentUser user,
         CancellationToken cancellationToken)
@@ -107,7 +107,7 @@ public static class NoteApi
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> ArchiveNote(
-        long id,
+        NoteId id,
         NoteService notes,
         CurrentUser user,
         CancellationToken cancellationToken)
@@ -127,10 +127,10 @@ public sealed record CreateNoteRequest(
     [property: StringLength(4000)] string? Body);
 
 public sealed record NoteResponse(
-    long Id,
+    NoteId Id,
     string Title,
     string? Body,
     DateTimeOffset CreatedAt,
     DateTimeOffset? ArchivedAt);
 
-public sealed record NoteListItem(long Id, string Title, DateTimeOffset CreatedAt);
+public sealed record NoteListItem(NoteId Id, string Title, DateTimeOffset CreatedAt);

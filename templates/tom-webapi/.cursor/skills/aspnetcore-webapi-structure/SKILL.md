@@ -3,8 +3,8 @@ name: aspnetcore-webapi-structure
 description: >-
   use this when scaffolding or reviewing ASP.NET Core 10 Web APIs built as a
   single-project API with a shared EF data layer and feature folders (minimal
-  APIs, TypedResults, EF Core + PostgreSQL, cookie Identity via AuthEndpoints,
-  Guid Identity keys, OpenAPI + Scalar). Covers layout, layers and feature
+  APIs, TypedResults, EF Core + PostgreSQL,   cookie Identity via AuthEndpoints,
+  Guid v7 typed entity ids, Guid Identity keys, OpenAPI + Scalar). Covers layout, layers and feature
   rules, endpoints, DTOs, errors, auth, data, reusable code and DI lifetimes,
   seeding, and tests.
 ---
@@ -29,7 +29,7 @@ src/{App}.Api/
 ├── Program.cs                # composition only
 ├── BannedSymbols.txt
 ├── Infrastructure/           # startup, auth wiring, dev-only OpenAPI/Scalar, errors, DatabaseInitializer, transaction helper
-├── Shared/                   # Result, paging, problems, current user, IDataSeeder, small helpers
+├── Shared/                   # Result, paging, problems, current user, typed-id JSON, IDataSeeder, small helpers
 ├── Data/                     # every entity + its configuration, AppDbContext, Migrations/
 │   ├── AppDbContext.cs
 │   ├── {Entity}.cs           # entity + IEntityTypeConfiguration<{Entity}>
@@ -124,7 +124,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("OpenApi
     app.MapScalarApiReference();
 }
 
-app.MapPasswordAuth<AppUser>();  // /auth (passkeys under /auth/passkeys when ServerDomain is set)
+app.MapAuthEndpoints<AppUser>();  // /identity (+ /account for passkeys)
 
 var api = app.MapGroup("/api");
 api.MapIdentityModule();
@@ -142,7 +142,7 @@ public partial class Program;
 - **API-01** Minimal APIs only. One resource = one `public static class {Resource}Api` with `Map{Resource}Api(this IEndpointRouteBuilder)` in `{Feature}/{Resource}Api.cs` (or `{Feature}/Apis/` after a MOD-07 split). `[archtest]`
 - **API-02** Handlers are named `private static async` methods. Inline lambdas only for one-line routes. `[review]`
 - **API-03** Return `TypedResults.*`. Declare the exact union: `Task<Results<Ok<T>, NotFound>>`. Never use `Results.*` or `IResult` as a return type. `[banned]` + `[archtest]`
-- **API-04** Routes: camelCase plural nouns (`/notes`, `/noteTags`). Constrain IDs (`{id:long}` or `{id:guid}`). Map literal routes before `{id}`. State changes that are not CRUD are `POST /{id}/{verb}` (`/archive`, `/approve`). `[review]`
+- **API-04** Routes: camelCase plural nouns (`/notes`, `/noteTags`). Constrain ids with `{id:guid}`; the handler parameter is the typed id (`IParsable`, DATA-04). Map literal routes before `{id}`. State changes that are not CRUD are `POST /{id}/{verb}` (`/archive`, `/approve`). `[review]`
 - **API-05** Every endpoint has `.WithName("VerbResource")` (unique, becomes the operationId), `.WithSummary(...)`, and a group-level `.WithTags(...)`. `[archtest]`
 - **API-06** Every endpoint has `.RequireAuthorization({Feature}Permissions.X)` or an explicit `.AllowAnonymous()`. `[archtest]`
 - **API-07** With cookie auth, every POST/PUT/PATCH/DELETE under `/api` has `.RequireAntiforgery()`. `[archtest]`
@@ -180,9 +180,9 @@ public partial class Program;
 
 ## Auth and permissions
 
-- **AUTH-01** Use the `AuthEndpoints` NuGet package (4.x) password facade: `AddPasswordAuth<AppUser, AppDbContext>(o => ...)` with `Session` left at `AuthEndpointsSession.Cookie` and `Path` `/auth`, `UseAuthEndpoints()` after `UseExceptionHandler()`, and `MapPasswordAuth<AppUser>()`. Do not call `AddAuthEndpoints`, `MapAuthEndpoints`, or `AddIdentityApiEndpoints`. `AddPasswordAuth` has no role overload and registers a user store that does not implement `IUserRoleStore`. `AddEntityFrameworkStores` uses `TryAdd`, so remove `IUserClaimsPrincipalFactory<AppUser>` and `IUserStore<AppUser>`, then call `AddRoles<AppRole>().AddEntityFrameworkStores<AppDbContext>()`. Check https://authendpoints.harten.id before using any other AuthEndpoints API. The facade always maps `POST /auth/register`. To drop public self-registration, compose the building blocks and omit sign-up (see the internal-app guide) instead of the facade map. `[review]`
-- **AUTH-02** Identity keys are `Guid`: `AppUser : IdentityUser<Guid>`, `AppRole : IdentityRole<Guid>`, `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>`. `AppUser` sets `Id = Guid.CreateVersion7()` in its constructor. `[archtest]`
-- **AUTH-03** If passkeys stay enabled, set `Passkeys.ServerDomain` (a non-whitespace value is what maps the routes) and register `AddPasskeyUserIdFactory(() => Guid.CreateVersion7().ToString())` so passkey sign-up does not mint v4 IDs. Omit `ServerDomain` to leave passkeys unmapped. `PasswordAuthOptions` has no `Passkeys.Enabled` switch. `[review]`
+- **AUTH-01** Use the `AuthEndpoints` NuGet package (3.x) facade: `AddAuthEndpoints<AppUser, AppRole, AppDbContext>(o => ...)`, `UseAuthEndpoints()` after `UseExceptionHandler()`, `MapAuthEndpoints<AppUser>()`. Do not call `AddIdentityApiEndpoints` yourself. Check https://madeyoga.github.io/AuthEndpoints before using any other AuthEndpoints API. To drop public self-registration, compose `MapCookieAuthEndpoints<AppUser>()` with a management map that omits `/register` (see the "composables" docs) instead of the facade map. `[review]`
+- **AUTH-02** Identity keys stay `Guid`, not a typed id: `AppUser : IdentityUser<Guid>`, `AppRole : IdentityRole<Guid>`, `AppDbContext : IdentityDbContext<AppUser, AppRole, Guid>`. `AppUser` sets `Id = Guid.CreateVersion7()` in its constructor. An existing `long` Identity key stays `long` (DATA-04). `[archtest]`
+- **AUTH-03** If passkeys stay enabled, register `AddPasskeyUserIdFactory(() => Guid.CreateVersion7().ToString())` so passkey sign-up does not mint v4 IDs, and set `Passkeys.ServerDomain`. Otherwise set `o.Passkeys.Enabled = false`. `[review]`
 - **AUTH-04** Cookie sign-in is the default. Enable JWT or bearer only for a named non-browser client. `[review]`
 - **AUTH-05** Register a real `IEmailSender<AppUser>` in Production. Keep `RequireConfirmedAccount = true` unless accounts are created by staff. `[review]`
 - **AUTH-06** API requests without a session get 401, not a 302 redirect. Forbidden gets 403. `[archtest]` (integration test)
@@ -194,8 +194,8 @@ public partial class Program;
 - **DATA-01** One `AppDbContext` in `Data/`, namespace `{App}.Api.Data`, with migrations in `Data/Migrations/`. `OnModelCreating` calls `base.OnModelCreating` and `ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly)`, nothing else. `[review]`
 - **DATA-02** One file per entity in `Data/`: the entity class and its `IEntityTypeConfiguration<T>` in the same file, named after the entity (`EntityA.cs`). Small enums and value types used only by that entity may live in the same file; anything used by several entities gets its own file. `ApplyConfigurationsFromAssembly` picks up the configurations. No data annotations for mapping. `[archtest]` + `[banned]` (mapping attributes)
 - **DATA-03** `AppDbContext` exposes one `DbSet<T>` property per entity (`public DbSet<Note> Notes => Set<Note>();`). No `db.X()` extension accessors. `[review]`
-- **DATA-04** Entity keys: default `long` identity columns. Use `Guid` v7 when the key is exposed publicly and enumeration matters, or the client creates the key (offline or idempotent create). Record the project default in the README. All entities in one aggregate use the same key type. `[review]`
-- **DATA-05** Guid keys are set in the app with `Guid.CreateVersion7()` and configured `ValueGeneratedNever()`. Never `Guid.NewGuid()` (v4, poor index locality). `[banned]` + `[archtest]` (EF model)
+- **DATA-04** New projects give each entity its own typed id, a Guid v7 stored as PostgreSQL `uuid`: `public readonly record struct ProductId(Guid Value)` and `static ProductId New() => new(Guid.CreateVersion7())`. The API sends a plain Guid string. Map it with an EF Core value converter to `Guid` (`ValueGeneratedNever()`), a System.Text.Json converter, and `IParsable<ProductId>` (route `{id:guid}`). An OpenAPI schema transformer publishes it as `string` / `uuid`. Do not add a second public id such as `GlobalUniqueId`. Identity keys stay `Guid` (AUTH-02). A foreign key uses the target's typed id; a foreign key to a user stays `Guid`. An existing app on `long` keys stays on `long`, including Identity. Do not migrate. `[archtest]` + `[review]`
+- **DATA-05** Create typed ids only with `New()` (`Guid.CreateVersion7()` inside that factory) and configure the key `ValueGeneratedNever()`. Never `Guid.NewGuid()` (v4, poor index locality). Identity sets its `Guid` in the constructor (AUTH-02) and the passkey factory (AUTH-03). `[banned]` + `[archtest]` (EF model)
 - **DATA-06** EF calls are async: `SaveChangesAsync`, `ToListAsync`, `FirstOrDefaultAsync`, `MigrateAsync`. `[banned]` for `SaveChanges`/`Migrate`, `[review]` for sync LINQ.
 - **DATA-07** Reads use `AsNoTracking()` and project to DTOs. `[review]`
 - **DATA-08** Get time from the injected `TimeProvider` (registered as `TimeProvider.System`). Never `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`, or `DateTimeOffset.UtcNow`. Store instants as `timestamptz` in UTC. `[banned]`
@@ -219,6 +219,10 @@ Static function or service:
 - **CODE-03** Services are concrete classes. Add an interface only for two or more real implementations, or for an external dependency (email, storage, a third-party HTTP API) that tests must fake. `[archtest]`
 - **CODE-04** Static fields are `const` or `static readonly` holding an immutable value (`FrozenDictionary`, `ImmutableArray`, string, record). No mutable static state. `[archtest]` + `[review]` for immutability of the value
 - **CODE-05** Business code never resolves from `IServiceProvider` (no service locator). Take dependencies in the constructor or handler parameters. Only `Infrastructure/` hosting code and `*Module` registration may touch `IServiceProvider`. `[archtest]`
+
+Value types:
+
+- **CODE-06** IDs get their own types. Wrap another value only when a mix-up would compile but be wrong. Never wrap an ordinary field. Identity's key stays `Guid` (AUTH-02). `[review]`
 
 Lifetimes:
 
@@ -247,7 +251,7 @@ Lifetimes:
 
 - **TEST-01** Integration tests use `WebApplicationFactory<Program>` against real PostgreSQL from `Testcontainers.PostgreSql`, one container per test collection, schema created with `MigrateAsync()`. No EF InMemory or SQLite. `[archtest]` (package scan)
 - **TEST-02** Each endpoint has at least: success, 401 or 403, and 404 or 400. `[review]`
-- **TEST-03** Sign in through the real `/auth/login` and send the antiforgery header from `/auth/csrfToken`. `[review]`
+- **TEST-03** Sign in through the real `/identity/login` and send the antiforgery header from `/identity/csrfToken`. `[review]`
 - **TEST-04** Replace `TimeProvider` with `FakeTimeProvider` (`Microsoft.Extensions.TimeProvider.Testing`) in tests that depend on time. `[review]`
 - **TEST-05** The architecture tests from enforceable-checks.md live in the same test project and run in CI. `[archtest]`
 
@@ -258,7 +262,7 @@ An agent may call a change done only when all of these hold:
 - [ ] `dotnet build` passes with zero warnings (`TreatWarningsAsErrors`), including RS0030.
 - [ ] `dotnet test` passes, including architecture tests.
 - [ ] New feature (only when MOD-08 holds): `{Feature}Module.cs` exists and `Program.cs` calls its `AddXModule` and `MapXModule`.
-- [ ] New entity: one file in `Data/` named after it, with the entity and its configuration, plus a `DbSet<T>` property on `AppDbContext`; migration added and reviewed.
+- [ ] New entity: one file in `Data/` named after it, with the typed id (`New()`, `uuid`, JSON converter, `IParsable`), the entity, and its configuration, plus a `DbSet<T>` property on `AppDbContext`; migration added and reviewed. An existing `long`-key app does not convert keys.
 - [ ] New endpoint: name, summary, tag, permission or `AllowAnonymous`, antiforgery on unsafe verbs, `CancellationToken`, typed result union, 201 `CreatedAtRoute` for creates, expected failures as `TypedResults.Problem`.
 - [ ] New permission: constant in `{Feature}Permissions` and policy registered in `AddXModule`.
 - [ ] No entity in any request or response. No feature changes another feature's entities directly (MOD-05). No loop between features, nothing depends on `Reports/`, and every file's namespace matches its top-level folder.

@@ -41,6 +41,20 @@ public static class InfrastructureSetup
                 };
                 return Task.CompletedTask;
             });
+            options.AddSchemaTransformer((schema, context, _) =>
+            {
+                if (context.JsonTypeInfo.Type != typeof(NoteId))
+                {
+                    return Task.CompletedTask;
+                }
+
+                // The JSON converter writes a Guid string. Describe that, not the record shape.
+                schema.Type = JsonSchemaType.String;
+                schema.Format = "uuid";
+                schema.Properties?.Clear();
+                schema.Required?.Clear();
+                return Task.CompletedTask;
+            });
         });
 
         services.AddDbContext<AppDbContext>((sp, options) => options.UseNpgsql(

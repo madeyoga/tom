@@ -31,7 +31,7 @@ dotnet new tom-webapi -n Shop -o ./Shop
 dotnet new tom-webapi -n Shop -o ./Shop --guards full
 ```
 
-`--guards` is `lean` (default) or `full`. Lean stamps BannedSymbols, analyzer severities, Release warnings-as-errors, endpoint tests, and CI, and omits architecture tests. `full` adds `tests/<Name>.Api.Tests/Architecture/`, NetArchTest, and Roslyn source scans. Details are in `templates/tom-webapi/README.md`.
+`--guards` is `lean` (default) or `full`. Lean stamps BannedSymbols, analyzer severities, Release warnings-as-errors, endpoint and typed-id tests, and CI, and omits architecture tests. `full` adds `tests/<Name>.Api.Tests/Architecture/`, NetArchTest, and Roslyn source scans. Details are in `templates/tom-webapi/README.md`.
 
 Uninstall: `dotnet new uninstall AuthEndpoints.Templates.TomWebApi`.
 

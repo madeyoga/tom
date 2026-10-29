@@ -73,9 +73,16 @@ public sealed class HostRulesTests(ApiFactory factory)
             Assert.Equal($"{Arch.Root}.Data", configs[0].Namespace);
 
             var key = entity.FindPrimaryKey();
-            if (key is { Properties.Count: 1 } && key.Properties[0].ClrType == typeof(Guid))
+            if (key is { Properties.Count: 1 })
             {
-                Assert.Equal(ValueGenerated.Never, key.Properties[0].ValueGenerated);
+                var property = key.Properties[0];
+                var storedAsGuid = property.ClrType == typeof(Guid)
+                    || property.GetProviderClrType() == typeof(Guid)
+                    || property.GetValueConverter()?.ProviderClrType == typeof(Guid);
+                if (storedAsGuid)
+                {
+                    Assert.Equal(ValueGenerated.Never, property.ValueGenerated);
+                }
             }
         }
 
