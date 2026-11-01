@@ -48,6 +48,6 @@ python3 .cursor/skills/trace-evidence/scripts/trace-evidence.py --trace-id <id>
 The script calls `GET http://localhost:18888/api/telemetry/traces?resource=<service>` and then `GET http://localhost:18888/api/telemetry/traces/{traceId}`. It reads up to 200 traces (`--limit` raises that). It prints one Markdown row per trace: trace id, method and route, status code, duration, SQL span count, and the SQL statements (truncated). A statement that occurs more than once in the same trace is marked `possible N+1`.
 
 4. Paste that table into the pull request body.
-5. Attach one or two dashboard screenshots of the key traces (the trace list, and one trace that shows the SQL). Open http://localhost:18888/traces and the trace itself. Do not commit the screenshots.
+The table is the evidence. Dashboard screenshots are not needed.
 
 The script prints to stdout and does not write a file. Do not commit evidence dumps, screenshots, or `/tmp/aspire-dashboard.log`. `.cursor/skills/trace-evidence/evidence/` is gitignored for anything placed there by hand.
